@@ -12,7 +12,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="LangGraph multi-agent research workflow (Researcher -> Writer -> Reviewer).",
     )
-    parser.add_argument("topic", help="The research topic to investigate and write about.")
+    parser.add_argument(
+        "topic",
+        nargs="?",
+        help="The research topic. If omitted, you'll be prompted interactively.",
+    )
     parser.add_argument(
         "--show-notes",
         action="store_true",
@@ -20,8 +24,18 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    topic = args.topic
+    if not topic:
+        try:
+            topic = input("Topic: ").strip()
+        except EOFError:
+            topic = ""
+    if not topic:
+        print("error: no topic provided", file=sys.stderr)
+        return 1
+
     app = build_graph()
-    result = app.invoke({"topic": args.topic, "revision_count": 0})
+    result = app.invoke({"topic": topic, "revision_count": 0})
 
     if args.show_notes:
         print("=" * 60)
