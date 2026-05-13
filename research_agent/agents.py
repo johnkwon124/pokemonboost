@@ -14,21 +14,37 @@ def _extract_text(response: anthropic.types.Message) -> str:
 
 
 RESEARCHER_SYSTEM = (
-    "You are a research analyst. Given a topic, produce structured notes with:\n"
-    "- 5-8 key facts or findings (each one a single bullet)\n"
+    "You are a research analyst. Use the web_search tool aggressively to ground "
+    "your findings in current, authoritative sources - prefer primary sources, "
+    "reputable publications, and recent material. Given a topic, produce structured notes with:\n"
+    "- 5-8 key facts or findings (each a single bullet, with an inline source URL in parens)\n"
     "- 2-3 open questions worth deeper investigation\n"
     "- A short list of useful angles for an article on the topic\n"
     "Be concrete. No fluff, no preamble."
 )
 
+WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search"}
+
 
 def researcher(state: ResearchState) -> dict:
+    messages = [{"role": "user", "content": f"Topic: {state['topic']}"}]
     response = _client.messages.create(
         model=MODEL,
-        max_tokens=4096,
+        max_tokens=8192,
         system=RESEARCHER_SYSTEM,
-        messages=[{"role": "user", "content": f"Topic: {state['topic']}"}],
+        tools=[WEB_SEARCH_TOOL],
+        messages=messages,
     )
+    # Server-side tool loop caps at ~10 iterations; resume on pause_turn.
+    while response.stop_reason == "pause_turn":
+        messages = messages + [{"role": "assistant", "content": response.content}]
+        response = _client.messages.create(
+            model=MODEL,
+            max_tokens=8192,
+            system=RESEARCHER_SYSTEM,
+            tools=[WEB_SEARCH_TOOL],
+            messages=messages,
+        )
     return {"research_notes": _extract_text(response)}
 
 
