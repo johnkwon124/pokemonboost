@@ -15,6 +15,9 @@ const FORCE_AFTER_SHAKY_TICKS = 3;
 interface Props {
   onResult: (outcome: ScanOutcome) => void;
   sessionCount: number;
+  // When true, start the camera on mount instead of waiting for the button —
+  // used after the first successful scan so subsequent rescans are one-tap.
+  autoStart?: boolean;
 }
 
 // Card-shaped guide the user aims with (fraction of frame).
@@ -25,7 +28,7 @@ const CARD = { x: 0.08, w: 0.84, top: 0.06, h: 0.88 };
 const BAND = { x: CARD.x, w: CARD.w, top: CARD.top + CARD.h * 0.8, h: CARD.h * 0.2 };
 const MAX_UPLOAD_DIM = 1600;
 
-export default function Scanner({ onResult, sessionCount }: Props) {
+export default function Scanner({ onResult, sessionCount, autoStart = false }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sampleRef = useRef<HTMLCanvasElement>(null);
@@ -241,6 +244,16 @@ export default function Scanner({ onResult, sessionCount }: Props) {
       setState("error");
     }
   }, [tick]);
+
+  // Auto-start the camera on mount when coming back from a result, so the user
+  // doesn't have to tap "카메라 시작" again. The permission is already granted in
+  // this session, so getUserMedia returns immediately.
+  useEffect(() => {
+    if (autoStart) void start();
+    // We only want this to fire on the first mount; subsequent re-renders
+    // (e.g. state changes) shouldn't restart the camera.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex flex-1 flex-col">

@@ -23,6 +23,37 @@ export default function CardResult({ card, analysis, session, onBack, onPickSess
         <span className="text-[11px] text-ink-500">저장 안 됨 · 닫으면 사라짐</span>
       </div>
 
+      {session.length > 1 && (
+        <section>
+          <p className="px-1 text-[11px] uppercase tracking-wider text-ink-500">이번 세션 ({session.length})</p>
+          <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto pb-1">
+            {session.map((s) => {
+              const p = pickGeneralPrice(s.card);
+              const active = s.card.id === card.id;
+              return (
+                <button
+                  key={s.key}
+                  onClick={() => onPickSession(s)}
+                  className={`flex w-20 shrink-0 flex-col items-center gap-1 rounded-xl border p-1.5 ${
+                    active ? "border-accent/70 bg-ink-800" : "border-ink-700 bg-ink-900"
+                  }`}
+                >
+                  <div className="relative h-20 w-14 overflow-hidden rounded-md bg-ink-800">
+                    {s.card.imageSmall && (
+                      <Image src={s.card.imageSmall} alt={s.card.name} fill sizes="56px" className="object-cover" unoptimized />
+                    )}
+                  </div>
+                  <span className="line-clamp-1 text-[10px] text-ink-300">{s.card.name}</span>
+                  <span className="text-[10px] font-medium text-ink-100">
+                    {p?.marketUsd != null ? `$${p.marketUsd.toFixed(2)}` : "—"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <div className="flex gap-3">
         {card.imageSmall && (
           <div className="relative h-40 w-28 shrink-0 overflow-hidden rounded-xl bg-ink-800">
@@ -96,37 +127,6 @@ export default function CardResult({ card, analysis, session, onBack, onPickSess
         <p className="rounded-2xl border border-ink-700 bg-ink-900 p-4 text-xs leading-relaxed text-ink-300">
           &ldquo;{card.flavorText}&rdquo;
         </p>
-      )}
-
-      {session.length > 1 && (
-        <section>
-          <p className="px-1 text-[11px] uppercase tracking-wider text-ink-500">이번 세션</p>
-          <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto pb-1">
-            {session.map((s) => {
-              const p = pickGeneralPrice(s.card);
-              const active = s.card.id === card.id;
-              return (
-                <button
-                  key={s.key}
-                  onClick={() => onPickSession(s)}
-                  className={`flex w-20 shrink-0 flex-col items-center gap-1 rounded-xl border p-1.5 ${
-                    active ? "border-accent/70 bg-ink-800" : "border-ink-700 bg-ink-900"
-                  }`}
-                >
-                  <div className="relative h-20 w-14 overflow-hidden rounded-md bg-ink-800">
-                    {s.card.imageSmall && (
-                      <Image src={s.card.imageSmall} alt={s.card.name} fill sizes="56px" className="object-cover" unoptimized />
-                    )}
-                  </div>
-                  <span className="line-clamp-1 text-[10px] text-ink-300">{s.card.name}</span>
-                  <span className="text-[10px] font-medium text-ink-100">
-                    {p?.marketUsd != null ? `$${p.marketUsd.toFixed(2)}` : "—"}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
       )}
     </div>
   );

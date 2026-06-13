@@ -9,8 +9,12 @@ import type { SessionScan } from "@/types/card";
 export default function Home() {
   const [current, setCurrent] = useState<ScanOutcome | null>(null);
   const [session, setSession] = useState<SessionScan[]>([]);
+  // Once the user has started the camera in this session, returning to the
+  // scanner from a result auto-resumes — saves the extra "카메라 시작" tap.
+  const [cameraReady, setCameraReady] = useState(false);
 
   const handleResult = (outcome: ScanOutcome) => {
+    setCameraReady(true);
     setCurrent(outcome);
     setSession((prev) => {
       if (prev[0]?.card.id === outcome.card.id) return prev;
@@ -42,7 +46,7 @@ export default function Home() {
           onPickSession={(s) => setCurrent({ card: s.card, analysis: s.analysis, ocrText: "" })}
         />
       ) : (
-        <Scanner onResult={handleResult} sessionCount={session.length} />
+        <Scanner onResult={handleResult} sessionCount={session.length} autoStart={cameraReady} />
       )}
     </div>
   );
