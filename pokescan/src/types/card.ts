@@ -42,8 +42,8 @@ export interface Card {
   flavorText: string | null;
   artist: string | null;
   prices: MarketPrice[];
-  // "en" for English modern, "jp" for Japanese cards matched to their English equivalent
-  locale: "en" | "jp";
+  // "en" English / "jp" Japanese / "kr" Korean — drives data source and labels
+  locale: "en" | "jp" | "kr";
   estimated: boolean; // true if price was inferred from the English equivalent
 }
 

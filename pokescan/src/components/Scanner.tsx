@@ -128,28 +128,31 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
       inFlightRef.current = true;
       setState("busy");
       try {
-        const parsed = await ocrCardNumber(base64);
-        if (!parsed) {
+        const candidate = await ocrCardNumber(base64);
+        if (!candidate) {
           setHint("번호가 안 보여요. 번호(025/198)를 노란 띠에 또렷하게 맞춰주세요");
           setState("scanning");
           return;
         }
+        const { parsed, lang } = candidate;
         if (parsed.raw === lastReadRef.current) {
           // two reads agree → trust it and resolve
           setHint("조회 중…");
-          const outcome = await lookupCard(parsed);
+          const outcome = await lookupCard(parsed, lang);
           if (outcome) {
             stopStream();
             onResult(outcome);
           } else {
             lastReadRef.current = null;
-            setHint(`${parsed.raw} 번호의 카드를 DB에서 못 찾았어요. 번호를 다시 비춰주세요`);
+            const langTag = lang === "ja" ? " (일본어)" : lang === "ko" ? " (한국어)" : "";
+            setHint(`${parsed.raw}${langTag} 카드를 DB에서 못 찾았어요. 번호를 다시 비춰주세요`);
             setState("scanning");
           }
         } else {
           // first sighting — wait for a confirming read
           lastReadRef.current = parsed.raw;
-          setHint(`번호 확인 중… (${parsed.raw}) 그대로 멈춰주세요`);
+          const langTag = lang === "ja" ? " · 일본어" : lang === "ko" ? " · 한국어" : "";
+          setHint(`번호 확인 중… (${parsed.raw}${langTag}) 그대로 멈춰주세요`);
           setState("scanning");
         }
       } catch (e) {

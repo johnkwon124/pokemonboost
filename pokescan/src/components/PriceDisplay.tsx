@@ -34,6 +34,9 @@ export default function PriceDisplay({ card }: { card: Card }) {
         {card.locale === "jp" && (
           <p className="mt-2 text-[11px] text-ink-400">일본어 카드는 별도 시세 소스가 부족합니다.</p>
         )}
+        {card.locale === "kr" && (
+          <p className="mt-2 text-[11px] text-ink-400">한국어 카드는 별도 시세 소스가 부족합니다.</p>
+        )}
       </section>
     );
   }

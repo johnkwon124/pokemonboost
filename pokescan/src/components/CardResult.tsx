@@ -80,6 +80,9 @@ export default function CardResult({ card, analysis, session, onBack, onPickSess
             {card.artist && <p className="mt-0.5 text-[11px] text-ink-500">illus. {card.artist}</p>}
           </div>
           <div className="flex flex-wrap gap-1.5">
+            {card.locale !== "en" && (
+              <Chip>{card.locale === "jp" ? "JP" : "KR"}</Chip>
+            )}
             {card.rarity && <Chip>{card.rarity}</Chip>}
             {card.types.map((t) => (
               <Chip key={t}>{t}</Chip>

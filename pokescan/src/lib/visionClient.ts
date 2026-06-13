@@ -24,7 +24,10 @@ export async function runVisionOcr(imageBase64: string): Promise<string> {
       requests: [
         {
           image: { content: imageBase64 },
-          features: [{ type: "TEXT_DETECTION", maxResults: 1 }]
+          features: [{ type: "TEXT_DETECTION", maxResults: 1 }],
+          // languageHints lets Vision pick the right OCR model for Asian scripts.
+          // Without this it sometimes returns garbled text for JP/KR cards.
+          imageContext: { languageHints: ["en", "ja", "ko"] }
         }
       ]
     })
