@@ -16,10 +16,7 @@ interface Props {
 export default function CardResult({ card, analysis, session, onBack, onPickSession }: Props) {
   return (
     <div className="flex flex-col gap-4 px-4 pb-8">
-      <div className="flex items-center justify-between">
-        <button onClick={onBack} className="text-sm text-ink-300 active:opacity-60">
-          ← 다시 스캔
-        </button>
+      <div className="flex justify-end">
         <span className="text-[11px] text-ink-500">저장 안 됨 · 닫으면 사라짐</span>
       </div>
 
@@ -53,6 +50,19 @@ export default function CardResult({ card, analysis, session, onBack, onPickSess
           </div>
         </section>
       )}
+
+      <div className="flex justify-center">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-ink-950 shadow-lg shadow-accent/20 active:scale-95"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M3 8V5a2 2 0 0 1 2-2h3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M21 16v3a2 2 0 0 1-2 2h-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            <path d="M7 12h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+          다음 카드 스캔
+        </button>
+      </div>
 
       <div className="flex gap-3">
         {card.imageSmall && (
