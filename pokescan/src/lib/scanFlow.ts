@@ -39,17 +39,31 @@ export async function ocrCardNumber(imageBase64: string): Promise<OcrCandidate |
   return { parsed: candidates[0], lang: detectCardLang(text) };
 }
 
-/** Resolve a parsed number to a card + analysis, routed by language. */
+async function tryLookup(lang: CardLang, parsed: ParsedNumber): Promise<Card | null> {
+  if (lang === "ja" || lang === "ko") {
+    return findJpKrCardByNumber(lang, parsed.number, parsed.printedTotal);
+  }
+  return findCardByNumber(parsed.number, parsed.printedTotal);
+}
+
+/**
+ * Resolve a parsed number to a card + analysis, starting with the language
+ * detected from the OCR text and falling back to the other databases if it
+ * doesn't match. Each individual lookup is strict (printed total must match
+ * exactly), so the fallback chain can't accidentally surface a wrong card —
+ * it only succeeds if a card with the *exact same* (number, set total) exists
+ * in another language DB.
+ */
 export async function lookupCard(
   parsed: ParsedNumber,
   lang: CardLang = "en"
 ): Promise<ScanOutcome | null> {
-  const card =
-    lang === "ja" || lang === "ko"
-      ? await findJpKrCardByNumber(lang, parsed.number, parsed.printedTotal)
-      : await findCardByNumber(parsed.number, parsed.printedTotal);
-  if (!card) return null;
-  return { card, analysis: buildStaticAnalysis(card), ocrText: parsed.raw };
+  const order: CardLang[] = lang === "en" ? ["en", "ja", "ko"] : [lang, "en", lang === "ja" ? "ko" : "ja"];
+  for (const tryLang of order) {
+    const card = await tryLookup(tryLang, parsed);
+    if (card) return { card, analysis: buildStaticAnalysis(card), ocrText: parsed.raw };
+  }
+  return null;
 }
 
 /** One-shot convenience used by the manual capture fallback. */

@@ -74,10 +74,15 @@ async function fetchBriefs(lang: Lang, localId: string): Promise<TcgdexBrief[]> 
  * map rather than by the rightmost dash.
  */
 function resolveSet(briefId: string, sets: Map<string, TcgdexSet>): TcgdexSet | null {
+  // setIds can contain hyphens (e.g. `sv-p`) and one id may be a prefix of
+  // another (e.g. `sv` vs `sv-p`), so pick the longest matching set id.
+  let best: TcgdexSet | null = null;
   for (const set of sets.values()) {
-    if (briefId.startsWith(set.id + "-")) return set;
+    if (briefId.startsWith(set.id + "-") && (!best || set.id.length > best.id.length)) {
+      best = set;
+    }
   }
-  return null;
+  return best;
 }
 
 function getSetTotal(set: TcgdexSet): number | null {

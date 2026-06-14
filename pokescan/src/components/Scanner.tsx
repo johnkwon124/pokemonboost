@@ -22,9 +22,8 @@ interface Props {
 
 // Card-shaped guide the user aims with (fraction of frame).
 const CARD = { x: 0.08, w: 0.84, top: 0.06, h: 0.88 };
-// We OCR only the bottom band of the card — that's where the collector number
-// and set total live (e.g. 025/198). Reading just this strip avoids the text
-// noise of the whole card and keeps the number legible.
+// Small inner band used only for motion detection — keeps the steadiness check
+// cheap by sampling the high-contrast number row instead of the whole card.
 const BAND = { x: CARD.x, w: CARD.w, top: CARD.top + CARD.h * 0.8, h: CARD.h * 0.2 };
 const MAX_UPLOAD_DIM = 1600;
 
@@ -43,7 +42,7 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
 
   const [state, setState] = useState<ScanState>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [hint, setHint] = useState("카드 하단의 번호(예: 025/198)를 노란 띠에 맞추고 잠시 멈추세요");
+  const [hint, setHint] = useState("카드 전체가 노란 박스에 들어오게 맞추고 잠시 멈추세요");
 
   const stopStream = useCallback(() => {
     if (intervalRef.current) {
@@ -61,6 +60,13 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
     y: Math.floor(h * BAND.top),
     w: Math.floor(w * BAND.w),
     h: Math.floor(h * BAND.h)
+  });
+
+  const cardRect = (w: number, h: number) => ({
+    x: Math.floor(w * CARD.x),
+    y: Math.floor(h * CARD.top),
+    w: Math.floor(w * CARD.w),
+    h: Math.floor(h * CARD.h)
   });
 
   // cheap motion gate so we only spend an OCR call when the user holds steady
@@ -90,14 +96,17 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
     return diff / (data.length / 4) / 3 < STILL_THRESHOLD;
   }, []);
 
-  const captureBand = useCallback((): string | null => {
+  // Capture the whole card. The parser handles noise, and grabbing the full
+  // card gives Japanese/Korean text (name, illustrator) the OCR needs to detect
+  // language reliably — the bottom band alone has barely any non-Latin chars.
+  const captureCard = useCallback((): string | null => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas || video.readyState < 2) return null;
     const vw = video.videoWidth;
     const vh = video.videoHeight;
     if (!vw || !vh) return null;
-    const r = bandRect(vw, vh);
+    const r = cardRect(vw, vh);
     const scale = Math.min(1, MAX_UPLOAD_DIM / Math.max(r.w, r.h));
     const outW = Math.round(r.w * scale);
     const outH = Math.round(r.h * scale);
@@ -106,7 +115,7 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
     ctx.drawImage(video, r.x, r.y, r.w, r.h, 0, 0, outW, outH);
-    return canvas.toDataURL("image/jpeg", 0.9).split(",")[1] ?? null;
+    return canvas.toDataURL("image/jpeg", 0.85).split(",")[1] ?? null;
   }, []);
 
   const captureFull = useCallback((): string | null => {
@@ -130,7 +139,7 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
       try {
         const candidate = await ocrCardNumber(base64);
         if (!candidate) {
-          setHint("번호가 안 보여요. 번호(025/198)를 노란 띠에 또렷하게 맞춰주세요");
+          setHint("번호가 안 보여요. 카드 전체를 박스에 맞추고 또렷하게 비춰주세요");
           setState("scanning");
           return;
         }
@@ -208,9 +217,9 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
       shakyTicksRef.current = 0;
     }
     attemptsRef.current += 1;
-    const b64 = captureBand();
+    const b64 = captureCard();
     if (b64) void processAuto(b64);
-  }, [frameIsSteady, captureBand, processAuto]);
+  }, [frameIsSteady, captureCard, processAuto]);
 
   const cameraErrorMessage = (e: unknown): string => {
     if (e instanceof DOMException) {
@@ -240,7 +249,7 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
       video.srcObject = stream;
       await video.play();
       setState("scanning");
-      setHint("카드 하단의 번호(예: 025/198)를 노란 띠에 맞추고 잠시 멈추세요");
+      setHint("카드 전체가 노란 박스에 들어오게 맞추고 잠시 멈추세요");
       intervalRef.current = window.setInterval(tick, SCAN_INTERVAL_MS);
     } catch (e) {
       setError(cameraErrorMessage(e));
@@ -279,15 +288,9 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
 
         {state !== "idle" && state !== "error" && (
           <div className="pointer-events-none absolute inset-0">
-            {/* card-shaped aiming guide */}
+            {/* card-shaped aiming guide — the whole card should fit inside */}
             <div className="absolute inset-x-[8%] inset-y-[6%]">
-              <div className="h-full w-full rounded-xl border-2 border-ink-200/60 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]" />
-            </div>
-            {/* bottom band = where the number is read; keep the card number here */}
-            <div className="absolute left-[8%] right-[8%] h-[17.6%]" style={{ top: `${BAND.top * 100}%` }}>
-              <div className="flex h-full w-full items-center justify-center rounded-md border-2 border-accent">
-                <span className="rounded bg-black/55 px-2 py-0.5 text-[10px] text-accent-soft">카드 번호를 여기에</span>
-              </div>
+              <div className="h-full w-full rounded-xl border-2 border-accent shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]" />
             </div>
             <div className="absolute left-1/2 top-6 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-[11px] font-medium tracking-wide text-ink-100">
               {state === "starting" && "카메라 준비 중…"}
