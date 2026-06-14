@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ocrCardNumber, lookupCard, scanImage, ScanNotFoundError, type ScanOutcome } from "@/lib/scanFlow";
+import { ocrCardNumber, lookupCard, type ScanOutcome } from "@/lib/scanFlow";
 
 type ScanState = "idle" | "starting" | "scanning" | "busy" | "error";
 
@@ -39,6 +39,9 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
   const inFlightRef = useRef(false);
   // last collector number read by OCR; we commit only when two reads agree
   const lastReadRef = useRef<string | null>(null);
+  // mutable handle for the current `tick` callback so restartScan can re-arm
+  // the interval without depending on tick directly (which would create a cycle)
+  const tickRef = useRef<(() => void) | null>(null);
 
   const [state, setState] = useState<ScanState>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -118,18 +121,6 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
     return canvas.toDataURL("image/jpeg", 0.85).split(",")[1] ?? null;
   }, []);
 
-  const captureFull = useCallback((): string | null => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas || video.readyState < 2) return null;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return null;
-    ctx.drawImage(video, 0, 0);
-    return canvas.toDataURL("image/jpeg", 0.92).split(",")[1] ?? null;
-  }, []);
-
   // auto path: OCR the band, require two consecutive agreeing reads, then look up
   const processAuto = useCallback(
     async (base64: string) => {
@@ -174,30 +165,19 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
     [onResult, stopStream]
   );
 
-  // manual path: user pressed the button — OCR the full frame and resolve in one shot
-  const manualShot = useCallback(async () => {
-    if (inFlightRef.current) return;
-    const b64 = captureFull();
-    if (!b64) return;
-    inFlightRef.current = true;
-    setState("busy");
-    setHint("사진으로 인식 중…");
-    try {
-      const outcome = await scanImage(b64);
-      stopStream();
-      onResult(outcome);
-    } catch (e) {
-      if (e instanceof ScanNotFoundError) {
-        setHint("번호를 찾지 못했어요. 카드 하단 번호가 또렷하게 나오도록 다시 시도해주세요");
-        setState("scanning");
-      } else {
-        setError(e instanceof Error ? e.message : "오류가 발생했습니다");
-        setState("error");
-      }
-    } finally {
-      inFlightRef.current = false;
+  // Re-arm the auto-scan loop without restarting the camera. Used by the
+  // "다시 시도" button after the attempt cap stops the interval.
+  const restartScan = useCallback(() => {
+    attemptsRef.current = 0;
+    shakyTicksRef.current = 0;
+    prevSampleRef.current = null;
+    lastReadRef.current = null;
+    setHint("카드 전체가 노란 박스에 들어오게 맞추고 잠시 멈추세요");
+    setState("scanning");
+    if (!intervalRef.current && streamRef.current) {
+      intervalRef.current = window.setInterval(tickRef.current!, SCAN_INTERVAL_MS);
     }
-  }, [captureFull, onResult, stopStream]);
+  }, []);
 
   const tick = useCallback(() => {
     if (inFlightRef.current) return;
@@ -206,7 +186,7 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
         window.clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      setHint("자동 인식이 안 되네요. '사진으로 시도'를 누르거나 카메라를 다시 시작하세요");
+      setHint("자동 인식이 안 되네요. '다시 시도'를 누르거나 카메라를 다시 시작하세요");
       return;
     }
     if (frameIsSteady()) {
@@ -220,6 +200,10 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
     const b64 = captureCard();
     if (b64) void processAuto(b64);
   }, [frameIsSteady, captureCard, processAuto]);
+
+  useEffect(() => {
+    tickRef.current = tick;
+  }, [tick]);
 
   const cameraErrorMessage = (e: unknown): string => {
     if (e instanceof DOMException) {
@@ -311,11 +295,11 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
         {state !== "idle" && state !== "error" && <p className="text-sm text-ink-300">{hint}</p>}
         {(state === "scanning" || state === "busy") && (
           <button
-            onClick={manualShot}
+            onClick={restartScan}
             disabled={state === "busy"}
             className="rounded-full border border-ink-600 px-5 py-2 text-sm font-medium text-ink-100 disabled:opacity-50 active:scale-95"
           >
-            사진으로 시도
+            다시 시도
           </button>
         )}
         {state === "error" && (
