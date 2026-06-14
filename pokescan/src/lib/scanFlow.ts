@@ -47,18 +47,19 @@ async function tryLookup(lang: CardLang, parsed: ParsedNumber): Promise<Card | n
 }
 
 /**
- * Resolve a parsed number to a card + analysis, starting with the language
- * detected from the OCR text and falling back to the other databases if it
- * doesn't match. Each individual lookup is strict (printed total must match
- * exactly), so the fallback chain can't accidentally surface a wrong card —
- * it only succeeds if a card with the *exact same* (number, set total) exists
- * in another language DB.
+ * Resolve a parsed number to a card + analysis. We do NOT cross-fall-back when
+ * Japanese or Korean was confidently detected: the strict (number, set total)
+ * match coincidentally lines up across languages often enough that a JP card
+ * with a 78-card set would otherwise resolve to an unrelated EN card from a
+ * different 78-card set. When only English is detected we still walk JP/KR
+ * after EN — that recovers JP/KR cards whose bottom band didn't surface any
+ * non-Latin characters to the detector.
  */
 export async function lookupCard(
   parsed: ParsedNumber,
   lang: CardLang = "en"
 ): Promise<ScanOutcome | null> {
-  const order: CardLang[] = lang === "en" ? ["en", "ja", "ko"] : [lang, "en", lang === "ja" ? "ko" : "ja"];
+  const order: CardLang[] = lang === "en" ? ["en", "ja", "ko"] : [lang];
   for (const tryLang of order) {
     const card = await tryLookup(tryLang, parsed);
     if (card) return { card, analysis: buildStaticAnalysis(card), ocrText: parsed.raw };

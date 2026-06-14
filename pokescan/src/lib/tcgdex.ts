@@ -61,7 +61,12 @@ async function loadSets(lang: Lang): Promise<Map<string, TcgdexSet>> {
 }
 
 async function fetchBriefs(lang: Lang, localId: string): Promise<TcgdexBrief[]> {
-  const url = `${BASE}/${lang}/cards?localId=${encodeURIComponent(localId)}`;
+  // TCGdex filters default to a laxist (partial / case-insensitive) match, so
+  // `?localId=28` would also match "128", "028", "281", etc. and we'd get
+  // hundreds of irrelevant cards. Doubling the `=` (`localId==28`) forces an
+  // exact match — without this the lookup picks the wrong card almost every
+  // time on common low numbers.
+  const url = `${BASE}/${lang}/cards?localId==${encodeURIComponent(localId)}`;
   const res = await fetch(url);
   if (!res.ok) return [];
   const json = (await res.json()) as TcgdexBrief[] | unknown;
