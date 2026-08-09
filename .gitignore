@@ -17,3 +17,6 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+# build artifact zips (deliverables, not source)
+*.zip

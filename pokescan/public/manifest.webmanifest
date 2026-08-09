@@ -1,0 +1,18 @@
+{
+  "name": "PokeScan",
+  "short_name": "PokeScan",
+  "description": "Pokemon TCG quick scanner with live market value",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#08090c",
+  "theme_color": "#08090c",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
