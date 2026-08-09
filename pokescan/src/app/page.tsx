@@ -3,11 +3,13 @@
 import { useState } from "react";
 import Scanner from "@/components/Scanner";
 import CardResult from "@/components/CardResult";
-import type { ScanOutcome } from "@/lib/scanFlow";
-import type { SessionScan } from "@/types/card";
+import CandidatePicker from "@/components/CandidatePicker";
+import { outcomeFromPick, type ScanChoices, type ScanOutcome } from "@/lib/scanFlow";
+import type { Card, SessionScan } from "@/types/card";
 
 export default function Home() {
   const [current, setCurrent] = useState<ScanOutcome | null>(null);
+  const [choices, setChoices] = useState<ScanChoices | null>(null);
   const [session, setSession] = useState<SessionScan[]>([]);
   // Once the user has started the camera in this session, returning to the
   // scanner from a result auto-resumes — saves the extra "카메라 시작" tap.
@@ -15,6 +17,7 @@ export default function Home() {
 
   const handleResult = (outcome: ScanOutcome) => {
     setCameraReady(true);
+    setChoices(null);
     setCurrent(outcome);
     setSession((prev) => {
       if (prev[0]?.card.id === outcome.card.id) return prev;
@@ -28,6 +31,15 @@ export default function Home() {
     });
   };
 
+  const handleChoices = (c: ScanChoices) => {
+    setCameraReady(true);
+    setChoices(c);
+  };
+
+  const handlePick = (card: Card) => {
+    handleResult(outcomeFromPick(card, choices?.matchedName ?? card.name));
+  };
+
   return (
     <div className="flex flex-1 flex-col">
       <header className="flex items-center justify-between px-5 pb-3 pt-[max(env(safe-area-inset-top),1rem)]">
@@ -37,7 +49,15 @@ export default function Home() {
         </span>
       </header>
 
-      {current ? (
+      {choices ? (
+        <CandidatePicker
+          matchedName={choices.matchedName}
+          lang={choices.lang}
+          candidates={choices.candidates}
+          onPick={handlePick}
+          onCancel={() => setChoices(null)}
+        />
+      ) : current ? (
         <CardResult
           card={current.card}
           analysis={current.analysis}
@@ -46,7 +66,12 @@ export default function Home() {
           onPickSession={(s) => setCurrent({ card: s.card, analysis: s.analysis, ocrText: "" })}
         />
       ) : (
-        <Scanner onResult={handleResult} sessionCount={session.length} autoStart={cameraReady} />
+        <Scanner
+          onResult={handleResult}
+          onChoices={handleChoices}
+          sessionCount={session.length}
+          autoStart={cameraReady}
+        />
       )}
     </div>
   );

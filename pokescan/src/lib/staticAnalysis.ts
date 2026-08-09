@@ -55,10 +55,10 @@ function collectCommentary(card: Card): string | null {
 
 function investmentCommentary(card: Card): string | null {
   if (card.locale === "jp") {
-    return "일본어 카드는 별도 시세 데이터가 없어 가격을 표시하지 않습니다. 동일 영문판이 있다면 그 시세를 참고하세요.";
+    return "일본어판 전용 시세 데이터가 없어 동일 카드 영문판 시세를 추정치로 표시합니다. 실제 일본어판 거래가는 다를 수 있습니다 (보통 영문판보다 낮게 형성).";
   }
   if (card.locale === "kr") {
-    return "한국어 카드는 별도 시세 데이터가 없어 가격을 표시하지 않습니다. 영문판/일본어판이 존재한다면 그 시세를 참고하세요.";
+    return "한국어판 전용 시세 데이터가 없어 동일 카드 영문판 시세를 추정치로 표시합니다. 실제 한국어판 거래가는 다를 수 있습니다 (보통 영문판보다 낮게 형성).";
   }
   const r = (card.rarity ?? "").toLowerCase();
   if (r.includes("rainbow") || r.includes("secret") || r.includes("illustration")) {

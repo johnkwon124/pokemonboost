@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ocrCardNumber, lookupCard, type ScanOutcome } from "@/lib/scanFlow";
+import {
+  analyzeFrame,
+  lookupEnglish,
+  resolveJpKr,
+  ScanNotFoundError,
+  type ScanChoices,
+  type ScanOutcome
+} from "@/lib/scanFlow";
 
 type ScanState = "idle" | "starting" | "scanning" | "busy" | "error";
 
@@ -14,6 +21,9 @@ const FORCE_AFTER_SHAKY_TICKS = 3;
 
 interface Props {
   onResult: (outcome: ScanOutcome) => void;
+  // JP/KR cards matched by name can have several English printings — hand the
+  // list to the parent so the user picks the exact card visually.
+  onChoices: (choices: ScanChoices) => void;
   sessionCount: number;
   // When true, start the camera on mount instead of waiting for the button —
   // used after the first successful scan so subsequent rescans are one-tap.
@@ -27,7 +37,7 @@ const CARD = { x: 0.08, w: 0.84, top: 0.06, h: 0.88 };
 const BAND = { x: CARD.x, w: CARD.w, top: CARD.top + CARD.h * 0.8, h: CARD.h * 0.2 };
 const MAX_UPLOAD_DIM = 1600;
 
-export default function Scanner({ onResult, sessionCount, autoStart = false }: Props) {
+export default function Scanner({ onResult, onChoices, sessionCount, autoStart = false }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sampleRef = useRef<HTMLCanvasElement>(null);
@@ -46,6 +56,8 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
   const [state, setState] = useState<ScanState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState("카드 전체가 노란 박스에 들어오게 맞추고 잠시 멈추세요");
+  // diagnostics from the most recent OCR attempt, viewable via a collapsible
+  const [debugLines, setDebugLines] = useState<string[]>([]);
 
   const stopStream = useCallback(() => {
     if (intervalRef.current) {
@@ -121,38 +133,79 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
     return canvas.toDataURL("image/jpeg", 0.85).split(",")[1] ?? null;
   }, []);
 
-  // auto path: OCR the band, require two consecutive agreeing reads, then look up
+  // auto path, routed by detected language:
+  //  - EN: strict (number, set total) lookup, committed only when two
+  //    consecutive reads agree (protects against transient misreads)
+  //  - JA/KO: identify by the Pokémon NAME and match English printings;
+  //    the user confirms visually via the candidate picker, so no consensus
+  //    round is needed and scans resolve on the first good read
   const processAuto = useCallback(
     async (base64: string) => {
       if (inFlightRef.current) return;
       inFlightRef.current = true;
       setState("busy");
       try {
-        const candidate = await ocrCardNumber(base64);
-        if (!candidate) {
+        const frame = await analyzeFrame(base64);
+        const dbg = [
+          `언어: ${frame.lang}`,
+          `OCR ${frame.text.length}자: ${frame.text.slice(0, 90).replace(/\n/g, " ")}`,
+          `번호 후보: ${frame.parsed?.raw ?? "없음"}`
+        ];
+
+        if (frame.lang === "ja" || frame.lang === "ko") {
+          setHint(`${frame.lang === "ja" ? "일본어" : "한국어"} 카드 인식 중…`);
+          try {
+            const res = await resolveJpKr(frame.text, frame.lang);
+            stopStream();
+            if ("kind" in res) {
+              dbg.push(`이름 매칭: ${res.matchedName} → 후보 ${res.candidates.length}장`);
+              setDebugLines(dbg);
+              onChoices(res);
+            } else {
+              dbg.push(`단일 매칭: ${res.card.name}`);
+              setDebugLines(dbg);
+              onResult(res);
+            }
+          } catch (e) {
+            if (e instanceof ScanNotFoundError) {
+              dbg.push(`실패: ${e.message}`);
+              setDebugLines(dbg);
+              setHint(e.message);
+              setState("scanning");
+            } else {
+              throw e;
+            }
+          }
+          return;
+        }
+
+        // English path
+        if (!frame.parsed) {
+          dbg.push("실패: 번호(예: 025/198)를 읽지 못함");
+          setDebugLines(dbg);
           setHint("번호가 안 보여요. 카드 전체를 박스에 맞추고 또렷하게 비춰주세요");
           setState("scanning");
           return;
         }
-        const { parsed, lang } = candidate;
-        if (parsed.raw === lastReadRef.current) {
-          // two reads agree → trust it and resolve
+        if (frame.parsed.raw === lastReadRef.current) {
           setHint("조회 중…");
-          const outcome = await lookupCard(parsed, lang);
+          const outcome = await lookupEnglish(frame.parsed);
           if (outcome) {
+            dbg.push(`매칭: ${outcome.card.name} (${outcome.card.setName})`);
+            setDebugLines(dbg);
             stopStream();
             onResult(outcome);
           } else {
             lastReadRef.current = null;
-            const langTag = lang === "ja" ? " (일본어)" : lang === "ko" ? " (한국어)" : "";
-            setHint(`${parsed.raw}${langTag} 카드를 DB에서 못 찾았어요. 번호를 다시 비춰주세요`);
+            dbg.push(`실패: ${frame.parsed.raw} 가 영문 DB에 없음`);
+            setDebugLines(dbg);
+            setHint(`${frame.parsed.raw} 카드를 DB에서 못 찾았어요. 번호를 다시 비춰주세요`);
             setState("scanning");
           }
         } else {
-          // first sighting — wait for a confirming read
-          lastReadRef.current = parsed.raw;
-          const langTag = lang === "ja" ? " · 일본어" : lang === "ko" ? " · 한국어" : "";
-          setHint(`번호 확인 중… (${parsed.raw}${langTag}) 그대로 멈춰주세요`);
+          lastReadRef.current = frame.parsed.raw;
+          setDebugLines(dbg);
+          setHint(`번호 확인 중… (${frame.parsed.raw}) 그대로 멈춰주세요`);
           setState("scanning");
         }
       } catch (e) {
@@ -162,7 +215,7 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
         inFlightRef.current = false;
       }
     },
-    [onResult, stopStream]
+    [onResult, onChoices, stopStream]
   );
 
   // Re-arm the auto-scan loop without restarting the camera. Used by the
@@ -308,6 +361,18 @@ export default function Scanner({ onResult, sessionCount, autoStart = false }: P
           </button>
         )}
         {sessionCount > 0 && state !== "idle" && <p className="text-[11px] text-ink-500">이번 세션 {sessionCount}장 스캔됨</p>}
+        {debugLines.length > 0 && state !== "idle" && (
+          <details className="w-full text-left">
+            <summary className="cursor-pointer text-center text-[11px] text-ink-500">진단 정보</summary>
+            <ul className="mt-1 space-y-0.5 rounded-lg bg-ink-900 p-2 text-[10px] leading-relaxed text-ink-400">
+              {debugLines.map((line, i) => (
+                <li key={i} className="break-all">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
       </div>
     </div>
   );

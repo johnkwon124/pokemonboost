@@ -137,6 +137,24 @@ export async function getCardById(id: string): Promise<Card | null> {
   return json.data ? normalize(json.data) : null;
 }
 
+/**
+ * All English printings of a Pokémon, newest set first. Used by the JP/KR flow:
+ * we resolve the species name to English, then let the user pick the exact
+ * printing from this list.
+ */
+export async function findCardsByName(name: string, limit = 8): Promise<Card[]> {
+  const clean = name.replace(/["*]/g, "").trim();
+  if (!clean) return [];
+  let raws = await tcgQuery(`name:"${clean}*"`, limit);
+  if (raws.length === 0) raws = await tcgQuery(`name:"*${clean}*"`, limit);
+  return raws.map((r) => normalize(r));
+}
+
+/** Re-tag an English card as the JP/KR card the user actually scanned. */
+export function asLocalized(card: Card, locale: "jp" | "kr"): Card {
+  return { ...card, locale, estimated: true };
+}
+
 /** Pick the most "general" market price — prefer normal/holo over special variants. */
 export function pickGeneralPrice(card: Card): MarketPrice | null {
   if (!card.prices.length) return null;

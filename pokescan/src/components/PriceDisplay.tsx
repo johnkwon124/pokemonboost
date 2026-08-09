@@ -78,7 +78,9 @@ export default function PriceDisplay({ card }: { card: Card }) {
       )}
 
       <p className="mt-3 text-[11px] leading-relaxed text-ink-400">
-        그레이딩(PSA 10) 가격이 아닌 일반 거래(raw, NM) 시세를 보여줍니다. TCGPlayer 마켓가 기준.
+        {card.estimated
+          ? "동일 카드 영문판의 raw NM 시세입니다. 일본어/한국어판 실거래가와 다를 수 있습니다."
+          : "그레이딩(PSA 10) 가격이 아닌 일반 거래(raw, NM) 시세를 보여줍니다. TCGPlayer 마켓가 기준."}
       </p>
     </section>
   );
