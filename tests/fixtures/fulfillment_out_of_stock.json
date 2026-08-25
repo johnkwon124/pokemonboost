@@ -1,0 +1,26 @@
+{
+  "data": {
+    "product": {
+      "tcin": "94300072",
+      "fulfillment": {
+        "product_id": "94300072",
+        "is_out_of_stock_in_all_store_locations": true,
+        "shipping_options": {
+          "availability_status": "OUT_OF_STOCK",
+          "loyalty_availability_status": "OUT_OF_STOCK",
+          "available_to_promise_quantity": 0.0
+        },
+        "store_options": [
+          {
+            "location_name": "Palo Alto",
+            "location_id": "1234",
+            "location_available_to_promise_quantity": 0.0,
+            "order_pickup": {"availability_status": "OUT_OF_STOCK"},
+            "in_store_only": {"availability_status": "NOT_SOLD_IN_STORE"}
+          }
+        ],
+        "scheduled_delivery": {"availability_status": "UNAVAILABLE"}
+      }
+    }
+  }
+}

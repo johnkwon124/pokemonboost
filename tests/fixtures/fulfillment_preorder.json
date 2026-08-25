@@ -1,0 +1,12 @@
+{
+  "data": {
+    "product": {
+      "tcin": "88888888",
+      "fulfillment": {
+        "product_id": "88888888",
+        "shipping_options": {"availability_status": "PRE_ORDER_SELLABLE"},
+        "store_options": []
+      }
+    }
+  }
+}

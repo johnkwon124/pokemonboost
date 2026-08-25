@@ -1,0 +1,14 @@
+{
+  "data": {
+    "product": {
+      "tcin": "94300072",
+      "item": {
+        "product_description": {
+          "title": "Pok&#233;mon Trading Card Game: <B>Scarlet &amp; Violet</B> Booster Bundle",
+          "downstream_description": "6 booster packs"
+        }
+      },
+      "price": {"formatted_current_price": "$26.99", "current_retail": 26.99}
+    }
+  }
+}

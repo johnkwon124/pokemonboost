@@ -17,3 +17,7 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+# pokemon_stock
+config.yaml
+.pokemon_stock_state.json

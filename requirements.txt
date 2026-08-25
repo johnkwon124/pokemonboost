@@ -1,3 +1,8 @@
+# research_agent (LangGraph workflow)
 anthropic>=0.40.0
 langgraph>=0.2.50
 python-dotenv>=1.0.0
+
+# pokemon_stock (Target restock monitor)
+requests>=2.32.0
+PyYAML>=6.0

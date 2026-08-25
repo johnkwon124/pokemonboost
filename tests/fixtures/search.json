@@ -1,0 +1,22 @@
+{
+  "data": {
+    "search": {
+      "search_response_id": "abc",
+      "products": [
+        {
+          "tcin": "94300072",
+          "item": {"product_description": {"title": "Pok&#233;mon TCG: Booster Bundle"}},
+          "price": {"formatted_current_price": "$26.99"}
+        },
+        {
+          "tcin": "89757321",
+          "item": {"product_description": {"title": "Pok&#233;mon TCG: Elite Trainer Box"}},
+          "price": {"formatted_current_price": "$49.99"}
+        },
+        {
+          "item": {"product_description": {"title": "TCIN 없는 항목"}}
+        }
+      ]
+    }
+  }
+}

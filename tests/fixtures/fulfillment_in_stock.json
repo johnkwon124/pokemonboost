@@ -1,0 +1,41 @@
+{
+  "data": {
+    "product": {
+      "tcin": "94300072",
+      "fulfillment": {
+        "product_id": "94300072",
+        "is_out_of_stock_in_all_store_locations": false,
+        "shipping_options": {
+          "availability_status": "IN_STOCK",
+          "loyalty_availability_status": "IN_STOCK",
+          "available_to_promise_quantity": 12.0,
+          "services": [{"shipping_method_id": "STANDARD", "min_delivery_date": "2026-08-28"}]
+        },
+        "store_options": [
+          {
+            "location_name": "Palo Alto",
+            "location_id": "1234",
+            "location_available_to_promise_quantity": 4.0,
+            "order_pickup": {"availability_status": "IN_STOCK"},
+            "in_store_only": {"availability_status": "NOT_SOLD_IN_STORE"},
+            "ship_to_store": {"availability_status": "IN_STOCK"}
+          },
+          {
+            "location_name": "San Jose",
+            "location_id": "5678",
+            "location_available_to_promise_quantity": 0.0,
+            "order_pickup": {"availability_status": "OUT_OF_STOCK"},
+            "in_store_only": {"availability_status": "NOT_SOLD_IN_STORE"}
+          },
+          {
+            "location_name": "Sunnyvale",
+            "location_id": "9999",
+            "order_pickup": {"availability_status": "IN_STOCK"},
+            "in_store_only": {"availability_status": "NOT_SOLD_IN_STORE"}
+          }
+        ],
+        "scheduled_delivery": {"availability_status": "UNAVAILABLE"}
+      }
+    }
+  }
+}

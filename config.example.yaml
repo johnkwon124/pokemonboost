@@ -1,0 +1,56 @@
+# Target.com 포켓몬 TCG 재입고 감시 설정
+# 복사해서 사용:  python -m pokemon_stock init
+
+# 감시할 상품. tcin은 Target 상품 URL의 "A-" 뒤 숫자입니다.
+#   https://www.target.com/p/.../-/A-94300072  ->  tcin: "94300072"
+# TCIN을 모르면:  python -m pokemon_stock search "pokemon booster bundle"
+products:
+  - tcin: "94300072"
+    label: "Pokémon TCG: Scarlet & Violet Booster Bundle"
+  - tcin: "89757321"
+    label: "Pokémon TCG: Elite Trainer Box"
+
+# 감시할 수령 방법: shipping(온라인 배송), pickup(매장 픽업)
+channels:
+  - shipping
+  # - pickup
+
+# pickup을 쓸 때 필요한 매장 ID. 조회:  python -m pokemon_stock stores 94301
+store_ids: []
+
+# 배송 가능 여부 판정에 쓰이는 위치 정보
+location:
+  zip: "94301"
+  state: "CA"
+  latitude: 37.44
+  longitude: -122.16
+
+polling:
+  interval_seconds: 180      # 확인 주기. 30초 미만은 거부됩니다(차단 방지)
+  jitter_seconds: 45         # 매 주기 ±무작위 지연으로 패턴 노출을 줄임
+  request_timeout: 15
+  max_retries: 3
+  realert_after_minutes: 0   # 0이면 품절->재입고 순간에만 알림. 60이면 재고 유지 중 1시간마다 재알림
+
+# 알림 채널 (여러 개 동시 사용 가능)
+notify:
+  console: true              # 터미널 출력 + 벨소리
+  desktop: false             # macOS/Linux/Windows 네이티브 알림
+  webhook:
+    enabled: false
+    url: ""                  # Discord 또는 Slack incoming webhook URL
+  email:
+    enabled: false
+    host: smtp.gmail.com
+    port: 587
+    use_tls: true
+    username: ""             # Gmail은 앱 비밀번호 필요
+    password: ""             # 비밀번호는 POKEMON_SMTP_PASSWORD 환경변수 권장
+    sender: ""
+    recipients: []
+
+# 재입고 알림 중복 방지를 위한 상태 파일
+state_file: ".pokemon_stock_state.json"
+
+# RedSky 공개 웹 키. 401/403이 나면 TARGET_API_KEY 환경변수로 최신 값을 넣으세요.
+# api_key: ""
