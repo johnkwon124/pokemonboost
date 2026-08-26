@@ -1,0 +1,51 @@
+# What the monitor watches. Everything here is safe to commit — credentials
+# live in repository secrets, never in this file.
+#
+# Flip `enabled` to true once restaurant.provider and restaurant.venue_id are
+# filled in; while it is false the scheduled workflow exits quietly instead of
+# e-mailing you about a half-finished setup.
+enabled: false
+
+restaurant:
+  name: "TODO — restaurant name"
+  # Which booking platform the restaurant uses: resy | opentable | sevenrooms | tock
+  provider: resy
+  # Resy: numeric venue id. OpenTable: numeric rid. Tock/SevenRooms: the slug
+  # in the booking URL. See docs/RESERVATION_MONITOR.md for how to find it.
+  venue_id: ""
+  timezone: America/Los_Angeles
+  url: "https://maps.app.goo.gl/5fchKsaemQi65xkCA"
+  # Optional. {date} {time} {party_size} {venue_id} are substituted; when
+  # omitted a sensible per-provider default is used.
+  booking_url_template: ""
+
+party_size: 3
+
+date_range:
+  start: "2026-10-01"
+  end: "2026-12-31"
+
+# Times are the venue's local time. tolerance_minutes widens the window, so a
+# 6:45 pm seating still counts as a hit for a 7:00 pm target.
+targets:
+  - weekday: friday
+    time: "19:00"
+    tolerance_minutes: 30
+  - weekday: saturday
+    time: "16:00"
+    tolerance_minutes: 30
+  - weekday: sunday
+    time: "16:00"
+    tolerance_minutes: 30
+
+notify:
+  to:
+    - jkwon47@gmail.com
+  # Don't re-send about the same seating more than once a day.
+  renotify_after_hours: 24
+  # Daily "still watching" e-mail, at this hour in the venue's timezone.
+  # Set to null to turn it off.
+  heartbeat_hour: 8
+  # Warn if the platform's API breaks, rather than going quietly blind.
+  alert_after_consecutive_failures: 3
+  alert_cooldown_hours: 6
