@@ -17,3 +17,6 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+# reservation monitor state (carried between runs by actions/cache)
+.monitor-state/

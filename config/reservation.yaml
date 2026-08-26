@@ -1,0 +1,57 @@
+# What the monitor watches. Everything here is safe to commit — no credentials
+# live in this file, and the OpenTable provider bootstraps its own token from
+# the restaurant's public page on each run.
+enabled: true
+
+restaurant:
+  name: "House of Prime Rib"
+  # House of Prime Rib takes reservations by phone or through OpenTable only.
+  provider: opentable
+  # With profile_url set, the numeric OpenTable restaurant id is resolved from
+  # the page itself, so there is nothing to look up by hand.
+  profile_url: "https://www.opentable.com/house-of-prime-rib"
+  venue_id: ""
+  timezone: America/Los_Angeles
+  url: "https://maps.app.goo.gl/5fchKsaemQi65xkCA"
+  booking_url_template: "https://www.opentable.com/restref/client/?rid={venue_id}&datetime={date}T{time}&covers={party_size}"
+
+party_size: 3
+
+date_range:
+  start: "2026-10-01"
+  end: "2026-12-31"
+
+# Venue-local times. The dining room runs 5–10pm Mon–Fri and 4–10pm Sat–Sun,
+# so Saturday and Sunday 4pm is the first seating of the day.
+# tolerance_minutes widens the window: a 6:45pm seating still counts for a
+# 7:00pm target, and is labelled as a near match in the e-mail.
+targets:
+  - weekday: friday
+    time: "19:00"
+    tolerance_minutes: 30
+  - weekday: saturday
+    time: "16:00"
+    tolerance_minutes: 30
+  - weekday: sunday
+    time: "16:00"
+    tolerance_minutes: 30
+
+# 39 Fri/Sat/Sun dates fall in the window. Checking all of them every ten
+# minutes would be ~5,600 OpenTable requests a day and an invitation to get
+# throttled, so each run takes the next 13 and the cursor rotates: the whole
+# quarter is covered every 3 runs, roughly every 30 minutes.
+scan:
+  max_dates_per_run: 13
+  pause_seconds: 0.5
+
+notify:
+  to:
+    - jkwon47@gmail.com
+  # Don't re-send about the same seating more than once a day.
+  renotify_after_hours: 24
+  # Daily "still watching" e-mail, at this hour in the venue's timezone.
+  # Set to null to turn it off.
+  heartbeat_hour: 8
+  # Warn if OpenTable's API breaks, rather than going quietly blind.
+  alert_after_consecutive_failures: 3
+  alert_cooldown_hours: 6
