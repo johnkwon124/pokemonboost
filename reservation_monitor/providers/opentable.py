@@ -58,6 +58,7 @@ class OpenTableProvider(Provider):
 
     def __init__(self, config) -> None:
         super().__init__(config)
+        self.gql_url: str = str(self.venue.options.get("gql_url") or GQL_URL)
         self._rid: str = str(self.venue.venue_id or "")
         self._csrf: str = os.environ.get("OPENTABLE_AUTH_TOKEN", "")
         self._booted = False
@@ -84,7 +85,7 @@ class OpenTableProvider(Provider):
         self._booted = True
         if self._rid and self._csrf:
             return
-        if not self.profile_url.startswith("https://www.opentable.com/"):
+        if not self.profile_url.startswith(("https://", "http://")):
             raise ProviderError(
                 "opentable: set restaurant.profile_url to the opentable.com page for the "
                 "restaurant (e.g. https://www.opentable.com/house-of-prime-rib), or supply "
@@ -114,7 +115,7 @@ class OpenTableProvider(Provider):
         self._bootstrap()
         anchor = str(self.venue.options.get("anchor_time", "19:00"))
         payload = self._post(
-            GQL_URL,
+            self.gql_url,
             json_body={
                 "operationName": "RestaurantsAvailability",
                 "query": QUERY,
