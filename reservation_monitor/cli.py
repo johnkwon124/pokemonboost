@@ -30,13 +30,15 @@ def cmd_check(args: argparse.Namespace) -> int:
         return 0
 
     start, end = config.clamp_to_today(now.date())
-    days = candidate_dates(config.targets, start, end)
-    print(f"[{now:%Y-%m-%d %H:%M}] {config.venue.name}: checking {len(days)} candidate dates "
+    all_days = candidate_dates(config.targets, start, end)
+    days = state.take_scan_slice(all_days, config.scan.max_dates_per_run)
+    scope = f"{len(days)} of {len(all_days)}" if len(days) != len(all_days) else f"{len(days)}"
+    print(f"[{now:%Y-%m-%d %H:%M}] {config.venue.name}: checking {scope} candidate dates "
           f"({start} … {end}) for a party of {config.party_size}")
 
     try:
         provider = build_provider(config)
-        slots = provider.collect(days)
+        slots = provider.collect(days, pause=config.scan.pause_seconds)
     except (ProviderError, ConfigError) as exc:
         failures = state.record_failure()
         print(f"error: {exc}", file=sys.stderr)
@@ -96,7 +98,7 @@ def cmd_probe(args: argparse.Namespace) -> int:
     days = candidate_dates(config.targets, start, end) if not args.all_days else _all_days(start, end)
 
     provider = build_provider(config)
-    slots = provider.collect(days)
+    slots = provider.collect(days, pause=config.scan.pause_seconds)
     if not slots:
         print(f"no seatings returned for {len(days)} dates ({start} … {end})")
         return 0

@@ -36,6 +36,7 @@ class VenueConfig:
     venue_id: str
     timezone: str = "America/Los_Angeles"
     url: str = ""
+    profile_url: str = ""
     booking_url_template: str = ""
     options: dict[str, Any] = field(default_factory=dict)
 
@@ -50,6 +51,20 @@ class NotifyConfig:
 
 
 @dataclass
+class ScanConfig:
+    """How much of the date range to cover in a single run.
+
+    Hitting every candidate date on every run would mean thousands of requests
+    a day against one endpoint, which is a good way to get throttled. Instead
+    each run takes the next slice and the cursor rotates, so the whole range is
+    still covered every few runs.
+    """
+
+    max_dates_per_run: int = 13
+    pause_seconds: float = 0.5
+
+
+@dataclass
 class MonitorConfig:
     enabled: bool
     venue: VenueConfig
@@ -58,6 +73,7 @@ class MonitorConfig:
     end_date: dt.date
     targets: list[Target]
     notify: NotifyConfig
+    scan: ScanConfig
 
     def clamp_to_today(self, today: dt.date) -> tuple[dt.date, dt.date]:
         """Dates in the past are never bookable, so never ask for them."""
@@ -146,14 +162,18 @@ def load_config(path: str | Path | None = None) -> MonitorConfig:
     # so the scheduled job can exit quietly instead of failing every ten
     # minutes while the venue is still being looked up.
     venue_id = os.environ.get("VENUE_ID") or raw_venue.get("venue_id") or ""
-    if enabled and not venue_id:
-        raise ConfigError("missing required field restaurant.venue_id")
+    profile_url = str(raw_venue.get("profile_url") or "")
+    # A profile_url lets the provider resolve the venue id itself, so only one
+    # of the two has to be present.
+    if enabled and not venue_id and not profile_url:
+        raise ConfigError("restaurant needs either venue_id or profile_url")
     venue = VenueConfig(
         name=str(_require(raw_venue, "name", "restaurant")),
         provider=str(_require(raw_venue, "provider", "restaurant")).strip().lower(),
         venue_id=str(venue_id),
         timezone=str(raw_venue.get("timezone", "America/Los_Angeles")),
         url=str(raw_venue.get("url", "")),
+        profile_url=profile_url,
         booking_url_template=str(raw_venue.get("booking_url_template", "")),
         options=dict(raw_venue.get("options") or {}),
     )
@@ -178,6 +198,16 @@ def load_config(path: str | Path | None = None) -> MonitorConfig:
         alert_cooldown_hours=int(raw_notify.get("alert_cooldown_hours", 6)),
     )
 
+    raw_scan = data.get("scan") or {}
+    if not isinstance(raw_scan, dict):
+        raise ConfigError("scan must be a mapping")
+    scan = ScanConfig(
+        max_dates_per_run=int(raw_scan.get("max_dates_per_run", 13) or 0),
+        pause_seconds=float(raw_scan.get("pause_seconds", 0.5)),
+    )
+    if scan.max_dates_per_run < 0:
+        raise ConfigError("scan.max_dates_per_run must not be negative")
+
     party_size = int(_require(data, "party_size", "<root>"))
     if party_size < 1:
         raise ConfigError("party_size must be at least 1")
@@ -190,4 +220,5 @@ def load_config(path: str | Path | None = None) -> MonitorConfig:
         end_date=end,
         targets=_parse_targets(data.get("targets")),
         notify=notify,
+        scan=scan,
     )

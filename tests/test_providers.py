@@ -163,3 +163,75 @@ def test_tock_parses_structured_times(tmp_path, monkeypatch):
 def test_empty_response_yields_no_slots(tmp_path, monkeypatch):
     provider = make(tmp_path, "resy", monkeypatch, [None])
     assert provider.slots_for_date(dt.date(2026, 10, 2)) == []
+
+
+OPENTABLE_PROFILE_HTML = """
+<html><head><meta name="csrf-token" content="abcdef0123456789abcdef"></head>
+<body><script>window.__INITIAL_STATE__ = {"restaurant":{"restaurantId":1234,"name":"Somewhere Good"}}</script></body></html>
+"""
+
+NO_PROFILE_CONFIG = """
+restaurant:
+  name: Somewhere Good
+  provider: opentable
+  profile_url: "https://www.opentable.com/somewhere-good"
+party_size: 3
+date_range:
+  start: "2026-10-01"
+  end: "2026-12-31"
+targets:
+  - weekday: friday
+    time: "19:00"
+    tolerance_minutes: 30
+notify:
+  to: someone@example.com
+"""
+
+
+def make_bootstrapping_opentable(tmp_path, monkeypatch, html, responses):
+    monkeypatch.delenv("OPENTABLE_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("OPENTABLE_COOKIE", raising=False)
+    path = tmp_path / "reservation.yaml"
+    path.write_text(NO_PROFILE_CONFIG)
+    provider = build_provider(load_config(path))
+    monkeypatch.setattr(provider, "_get_text", lambda url, **kw: html)
+    monkeypatch.setattr(provider, "_request", lambda *a, **kw: responses.pop(0) if responses else None)
+    return provider
+
+
+def test_opentable_resolves_rid_and_token_from_the_profile_page(tmp_path, monkeypatch):
+    provider = make_bootstrapping_opentable(
+        tmp_path, monkeypatch, OPENTABLE_PROFILE_HTML, [OPENTABLE_PAYLOAD]
+    )
+    slots = provider.slots_for_date(dt.date(2026, 10, 2))
+    assert provider._rid == "1234"
+    assert provider._csrf == "abcdef0123456789abcdef"
+    assert [s.start for s in slots] == [dt.datetime(2026, 10, 2, 19, 0)]
+
+
+def test_opentable_bootstraps_only_once(tmp_path, monkeypatch):
+    provider = make_bootstrapping_opentable(
+        tmp_path, monkeypatch, OPENTABLE_PROFILE_HTML, [OPENTABLE_PAYLOAD, OPENTABLE_PAYLOAD]
+    )
+    loads = []
+    monkeypatch.setattr(provider, "_get_text", lambda url, **kw: (loads.append(url), OPENTABLE_PROFILE_HTML)[1])
+    provider.slots_for_date(dt.date(2026, 10, 2))
+    provider.slots_for_date(dt.date(2026, 10, 9))
+    assert len(loads) == 1
+
+
+def test_opentable_says_so_when_the_page_hides_the_rid(tmp_path, monkeypatch):
+    provider = make_bootstrapping_opentable(tmp_path, monkeypatch, "<html>nothing here</html>", [])
+    with pytest.raises(Exception, match="restaurant id"):
+        provider.slots_for_date(dt.date(2026, 10, 2))
+
+
+def test_opentable_config_needs_a_venue_or_a_profile_url(tmp_path):
+    from reservation_monitor.config import ConfigError
+
+    path = tmp_path / "reservation.yaml"
+    path.write_text(
+        NO_PROFILE_CONFIG.replace('  profile_url: "https://www.opentable.com/somewhere-good"\n', "")
+    )
+    with pytest.raises(ConfigError, match="venue_id or profile_url"):
+        load_config(path)

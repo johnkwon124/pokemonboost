@@ -72,3 +72,39 @@ def test_alert_respects_its_cooldown_and_success_resets(tmp_path):
     state.record_success(NOW)
     assert state.consecutive_failures == 0
     assert not state.should_alert(NOW + dt.timedelta(hours=7), 3, 6)
+
+
+def test_scan_slice_rotates_and_covers_everything(tmp_path):
+    state = State(tmp_path / "s.json")
+    days = list(range(10))
+    seen = []
+    for _ in range(5):
+        seen.extend(state.take_scan_slice(days, 4))
+    # Two and a half passes: every date covered, in order, wrapping around.
+    assert seen[:10] == days
+    assert sorted(set(seen)) == days
+
+
+def test_scan_slice_wraps_across_the_end(tmp_path):
+    state = State(tmp_path / "s.json")
+    days = list(range(5))
+    assert state.take_scan_slice(days, 3) == [0, 1, 2]
+    assert state.take_scan_slice(days, 3) == [3, 4, 0]
+    assert state.take_scan_slice(days, 3) == [1, 2, 3]
+
+
+def test_scan_slice_of_zero_or_oversize_takes_everything(tmp_path):
+    state = State(tmp_path / "s.json")
+    days = list(range(5))
+    assert state.take_scan_slice(days, 0) == days
+    assert state.take_scan_slice(days, 99) == days
+    assert state.take_scan_slice([], 3) == []
+
+
+def test_scan_cursor_survives_a_round_trip(tmp_path):
+    path = tmp_path / "s.json"
+    days = list(range(6))
+    first = State(path)
+    first.take_scan_slice(days, 2)
+    first.save()
+    assert State(path).take_scan_slice(days, 2) == [2, 3]

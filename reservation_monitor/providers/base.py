@@ -71,6 +71,28 @@ class Provider:
     def _get(self, url: str, *, params: dict | None = None, headers: dict | None = None) -> Any:
         return self._request("GET", url, params=params, headers=headers)
 
+    def _get_text(self, url: str, *, params: dict | None = None, attempts: int = 3) -> str:
+        """Fetch a page as text, keeping any cookies the site sets.
+
+        Used to bootstrap credentials off a public page rather than asking a
+        human to paste a token that will expire mid-watch.
+        """
+        last: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                resp = self.session.get(
+                    url, params=params, timeout=25, headers={"Accept": "text/html,*/*"}
+                )
+            except requests.RequestException as exc:
+                last = exc
+            else:
+                if resp.status_code == 200:
+                    return resp.text
+                last = ProviderError(f"{self.name}: HTTP {resp.status_code} from {url}")
+            if attempt < attempts - 1:
+                time.sleep(2 ** attempt)
+        raise ProviderError(f"{self.name}: could not load {url}: {last}")
+
     def _post(self, url: str, *, json_body: Any = None, headers: dict | None = None) -> Any:
         return self._request("POST", url, json_body=json_body, headers=headers)
 

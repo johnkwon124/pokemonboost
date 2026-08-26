@@ -23,6 +23,7 @@ class State:
             "last_success_at": None,
             "consecutive_failures": 0,
             "last_alert_at": None,
+            "scan_cursor": 0,
         }
         if self.path.exists():
             try:
@@ -59,6 +60,19 @@ class State:
             except ValueError:
                 continue
         self._data["notified"] = kept
+
+    # -- scan rotation ----------------------------------------------------
+
+    def take_scan_slice(self, days: list, size: int) -> list:
+        """Next ``size`` dates, wrapping around, advancing the stored cursor."""
+        if not days or size <= 0 or size >= len(days):
+            self._data["scan_cursor"] = 0
+            return days
+        cursor = int(self._data.get("scan_cursor", 0)) % len(days)
+        doubled = days + days
+        chosen = doubled[cursor:cursor + size]
+        self._data["scan_cursor"] = (cursor + size) % len(days)
+        return chosen
 
     # -- heartbeat -------------------------------------------------------
 
