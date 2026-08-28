@@ -50,17 +50,28 @@ class Probe:
     headers: dict
 
 
+# Round one established that this is not about headers. Every shape sent to
+# www.opentable.com -- including robots.txt, a static file every crawler on the
+# internet fetches, and a bare HEAD -- was tarpitted for the full timeout, while
+# example.com answered in 0.0s from the same runner. A block that catches
+# robots.txt is keyed on the connecting IP, not on what the request looks like,
+# so neither better headers nor a headless browser would change it.
+#
+# Round two asks a narrower question: is the block on the whole of OpenTable's
+# infrastructure, or only on the www host? The mobile app and the regional sites
+# sit behind different front doors, and any one of them answering would be
+# enough to build on. Even a 404 counts as reachable here -- it means packets
+# get through and only the path is wrong.
 PROBES = [
-    # Does anything at all come back from the host?
-    Probe("robots.txt, minimal", "GET", "https://www.opentable.com/robots.txt", MINIMAL),
-    Probe("robots.txt, browser-like", "GET", "https://www.opentable.com/robots.txt", BROWSERLIKE),
-    # Is the whole site guarded, or only the restaurant page?
-    Probe("home page, browser-like", "GET", "https://www.opentable.com/", BROWSERLIKE),
-    # The page we actually need, both ways.
-    Probe("venue page, minimal", "GET", "https://www.opentable.com/house-of-prime-rib", MINIMAL),
-    Probe("venue page, browser-like", "GET", "https://www.opentable.com/house-of-prime-rib", BROWSERLIKE),
-    Probe("venue page, HEAD", "HEAD", "https://www.opentable.com/house-of-prime-rib", BROWSERLIKE),
-    # A control: somewhere unrelated, to prove the runner has egress at all.
+    Probe("www (known tarpit)", "GET", "https://www.opentable.com/robots.txt", BROWSERLIKE),
+    Probe("apex, no www", "GET", "https://opentable.com/robots.txt", BROWSERLIKE),
+    Probe("mobile app API root", "GET", "https://mobile-api.opentable.com/", BROWSERLIKE),
+    Probe("mobile app API, v1", "GET", "https://mobile-api.opentable.com/api/v1/", BROWSERLIKE),
+    Probe("api host", "GET", "https://api.opentable.com/", BROWSERLIKE),
+    Probe("platform host", "GET", "https://platform.opentable.com/", BROWSERLIKE),
+    Probe("UK site", "GET", "https://www.opentable.co.uk/robots.txt", BROWSERLIKE),
+    Probe("Canada site", "GET", "https://www.opentable.ca/robots.txt", BROWSERLIKE),
+    # Control: proves the runner still has working egress.
     Probe("control (example.com)", "GET", "https://example.com/", BROWSERLIKE),
 ]
 
@@ -71,7 +82,7 @@ CHALLENGE_MARKERS = (
 
 
 def run(timeout: float = 15.0) -> int:
-    print(f"probing {len(PROBES)} request shapes, {timeout:.0f}s timeout each\n")
+    print(f"probing {len(PROBES)} hosts, {timeout:.0f}s timeout each\n")
     reachable = 0
     for probe in PROBES:
         started = time.monotonic()
@@ -93,8 +104,13 @@ def run(timeout: float = 15.0) -> int:
         elapsed = time.monotonic() - started
         body = resp.text if probe.method != "HEAD" else ""
         marker = next((m for m in CHALLENGE_MARKERS if m.lower() in body.lower()), None)
-        verdict = "CHALLENGE" if marker else ("OK" if resp.ok else "BLOCKED")
-        if resp.ok and not marker:
+        if marker:
+            verdict = "CHALLENGE"
+        elif resp.status_code in (401, 403, 429):
+            verdict = "REFUSED"
+        else:
+            # Any other answer, 404 included, means packets got through.
+            verdict = "REACHABLE"
             reachable += 1
         print(
             f"  {probe.label:28s}  {verdict:10s} HTTP {resp.status_code} "
@@ -102,9 +118,9 @@ def run(timeout: float = 15.0) -> int:
             + (f"  marker={marker!r}" if marker else "")
             + (f"  server={resp.headers.get('Server')}" if resp.headers.get("Server") else "")
         )
-        if marker or not resp.ok:
+        if marker or resp.status_code >= 400:
             snippet = " ".join(body[:300].split())
             print(f"      {snippet}")
 
-    print(f"\n{reachable}/{len(PROBES)} shapes got a clean response")
+    print(f"\n{reachable}/{len(PROBES)} hosts are reachable at all")
     return 0
