@@ -11,10 +11,14 @@ on:
     - cron: "3,13,23,33,43,53 * * * *"
   workflow_dispatch:
     inputs:
-      probe:
-        description: "Print every seating found instead of e-mailing"
-        type: boolean
-        default: false
+      mode:
+        description: "What to run"
+        type: choice
+        default: check
+        options:
+          - check      # normal scan; e-mails anything new
+          - probe      # print every seating found, send nothing
+          - diagnose   # report how the booking host responds to us
 
 # Never let two scans overlap; a queued one is dropped rather than doubled up.
 concurrency:
@@ -61,12 +65,7 @@ jobs:
           RESY_AUTH_TOKEN: ${{ secrets.RESY_AUTH_TOKEN }}
           OPENTABLE_AUTH_TOKEN: ${{ secrets.OPENTABLE_AUTH_TOKEN }}
           OPENTABLE_COOKIE: ${{ secrets.OPENTABLE_COOKIE }}
-        run: |
-          if [ "${{ inputs.probe }}" = "true" ]; then
-            python -m reservation_monitor probe
-          else
-            python -m reservation_monitor check
-          fi
+        run: python -m reservation_monitor "${{ inputs.mode || 'check' }}"
 
       - name: Save monitor state
         if: always()
