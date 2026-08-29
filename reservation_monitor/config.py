@@ -11,6 +11,7 @@ from typing import Any
 import yaml
 
 from .models import Target
+from .release import ReleaseRule
 
 WEEKDAYS = {
     "monday": 0,
@@ -74,6 +75,7 @@ class MonitorConfig:
     targets: list[Target]
     notify: NotifyConfig
     scan: ScanConfig
+    release: ReleaseRule = field(default_factory=ReleaseRule)
 
     def clamp_to_today(self, today: dt.date) -> tuple[dt.date, dt.date]:
         """Dates in the past are never bookable, so never ask for them."""
@@ -208,6 +210,18 @@ def load_config(path: str | Path | None = None) -> MonitorConfig:
     if scan.max_dates_per_run < 0:
         raise ConfigError("scan.max_dates_per_run must not be negative")
 
+    raw_release = data.get("release") or {}
+    if not isinstance(raw_release, dict):
+        raise ConfigError("release must be a mapping")
+    release = ReleaseRule(
+        lead_days=int(raw_release.get("lead_days", 365)),
+        open_time=_as_time(raw_release.get("open_time", "09:00"), "release.open_time"),
+        alarm_minutes=int(raw_release.get("alarm_minutes", 15)),
+        assumed=bool(raw_release.get("assumed", True)),
+    )
+    if release.lead_days < 0:
+        raise ConfigError("release.lead_days must not be negative")
+
     party_size = int(_require(data, "party_size", "<root>"))
     if party_size < 1:
         raise ConfigError("party_size must be at least 1")
@@ -221,4 +235,5 @@ def load_config(path: str | Path | None = None) -> MonitorConfig:
         targets=_parse_targets(data.get("targets")),
         notify=notify,
         scan=scan,
+        release=release,
     )

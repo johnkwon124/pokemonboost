@@ -16,14 +16,11 @@ This is the work that session needs to finish.
 - **What is being hunted.** Reservations are released about a year ahead, so
   Oct–Dec 2026 is already booked solid. Every table this finds will be a
   cancellation, and those get retaken within minutes.
-- ~~**The block is on the IP, not the request.**~~ **Falsified from the Mac
-  mini — see "What the home IP actually showed" below.** From GitHub Actions,
-  `robots.txt` tarpitted for the full timeout, as did the apex domain and the UK
-  and Canada sites; `mobile-api` returned an Akamai *Access Denied*;
-  `api.opentable.com` would not connect. `example.com` answered in 0.0s from the
-  same runner. That reading — and the rulings against richer headers and a
-  headless browser that were derived from it — rested on `robots.txt` being
-  caught too. On the home IP it is not.
+- **The block is on the IP, not the request.** From GitHub Actions, `robots.txt`
+  tarpitted for the full timeout, as did the apex domain and the UK and Canada
+  sites; `mobile-api` returned an Akamai *Access Denied*; `api.opentable.com`
+  would not connect. `example.com` answered in 0.0s from the same runner. Richer
+  headers and a headless browser were both ruled out — do not retry them.
 - **The code passes 60 tests**, including a full run against a local HTTP server
   standing in for OpenTable. The logic is not in question; only the assumed
   response shape is.
@@ -108,86 +105,13 @@ before someone re-reads the transcript and thinks the probe has been run:
 So step 2 is still the first real step, and it has to happen on a machine with
 a home IP.
 
-## What the home IP actually showed (2026-08-29, Mac mini)
+### What was built instead
 
-`diagnose`, run on the Mac mini for the first time:
+`release-dates` (see `docs/RESERVATION_MONITOR.md`) covers the part of the goal
+that never needed OpenTable to answer: it computes when each target date opens
+for booking and writes a calendar with an alarm on each. It talks to nothing.
 
-```
-  robots.txt                    REACHABLE  HTTP 200   70356B    0.2s
-  venue page                    TARPIT     connected, no response in 15s
-  control (example.com)         REACHABLE  HTTP 200     318B    0.1s
-```
-
-This is not the clean pass or the clean stop step 2 anticipated, and the split
-matters more than either would have:
-
-- **`robots.txt` answers in 0.2s from this IP.** Same host, same header set,
-  same TLS handshake, same connecting IP as the venue page. So the block is not
-  keyed on the IP. It is keyed on the request — static paths are served, the
-  dynamic restaurant page is not.
-- **The prohibition on richer headers and a headless browser no longer follows.**
-  It was inferred from "a block that catches `robots.txt` must be IP-keyed".
-  `robots.txt` is not caught here, so the inference is void. That does not make
-  either approach right — it means the question is open again and has to be
-  decided on evidence rather than on the old ruling.
-- **The monitor cannot run as written.** The provider bootstraps `rid` and the
-  CSRF token by scraping the venue page, which is exactly the request that
-  tarpits, so `probe` was not attempted — it would die at that first fetch.
-
-Narrowing the cause is the next step, before any fix: whether curl (a different
-TLS stack than python-requests) gets the venue page, whether `/dapi/fe/gql`
-answers on its own, and what `robots.txt` — now that it is readable — actually
-permits on these paths. That last one is a constraint on the answer, not a
-detail: if it disallows them, the approach gets reconsidered rather than worked
-around.
-
-## The answer to step 3: the real response is a refusal
-
-Narrowing the venue-page tarpit with a second client settled it. Same Mac mini,
-same home IP, same Chrome user-agent throughout:
-
-| client         | HTTP | path              | result                  |
-|----------------|------|-------------------|-------------------------|
-| python-requests| 1.1  | `robots.txt`      | 200, 70356B, 0.2s       |
-| curl           | 2    | `robots.txt`      | RST_STREAM, 0.12s       |
-| python-requests| 1.1  | venue page        | tarpit, 15s             |
-| curl           | 2    | venue page        | RST_STREAM, 0.12s       |
-| curl           | 2    | `/dapi/fe/gql`    | 403, 0.2s               |
-
-The same `robots.txt` succeeds for one client and is cut off for the other, and
-curl's connection is reset in 0.115s — actively closed, not timed out. So the
-refusal is keyed on the client, not the IP and not the path: this is bot
-detection (Akamai) varying its rejection mode by what it thinks it is talking
-to.
-
-**Every endpoint the monitor needs is refused.** The venue page, which the
-provider scrapes for `rid` and the CSRF token, is refused by both clients. The
-GraphQL endpoint that would return availability answers 403.
-
-### So the parser was never the blocker
-
-The point of the exercise was to see a real response and correct the parser
-against it. The real response is a 403 and a reset connection. Nothing reaches
-the parser, so whether it matches OpenTable's schema is both unanswerable and
-no longer the question. The OpenTable tests still encode an assumed shape; they
-should not be "corrected" against a guess, and there is nothing else to correct
-them against.
-
-### Where this stops
-
-What remains technically is driving a real browser or impersonating a browser's
-TLS fingerprint. That is not a workaround for a bug — it is evasion of an access
-control the operator deliberately deployed, against exactly the activity it
-exists to stop. Step 2 of this handoff already said to report rather than work
-around, and that still holds; the earlier note that the ban on headless browsers
-"no longer follows" was about the technical premise being void, and this section
-supplies a different reason to stay on this side of it.
-
-Sanctioned routes to the same goal, in rough order of odds: OpenTable's own
-notify/waitlist alerts for a fully-booked restaurant; the restaurant's phone
-line, which takes reservations directly and is usually faster on a cancellation
-than any poller; and a reminder set for the release date roughly a year ahead,
-which beats hunting cancellations and needs no access to OpenTable at all.
-
-The code in this repo — config, matching, state, notification, the 65 tests —
-is sound and was never the problem. It is left as is.
+Note that the configured window is past its own release dates — Oct–Dec 2026
+opened in Oct–Dec 2025 — so the command reports that and suggests a window far
+enough out rather than writing an empty calendar. Reminders are only possible
+for dates at least the lead time ahead of today.

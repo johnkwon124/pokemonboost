@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import pathlib
 import sys
 from zoneinfo import ZoneInfo
 
@@ -11,6 +12,7 @@ from .config import ConfigError, MonitorConfig, load_config
 from .matching import candidate_dates, match_slots
 from .notify import Mailer, NotifyError, availability_email, failure_email, heartbeat_email
 from .providers import ProviderError, build_provider
+from .release import build_ics, plan
 from .state import DEFAULT_STATE_PATH, State
 
 
@@ -121,6 +123,74 @@ def cmd_probe(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_release_dates(args: argparse.Namespace) -> int:
+    """Write a calendar of the moments target dates open for booking.
+
+    Availability polling needs the booking platform to answer. This does not:
+    the release moment falls out of the target date and the venue's lead time,
+    so it can be computed now and handed to a calendar that fires on its own.
+    """
+    config = load_config(args.config)
+    rule = config.release
+    tz = config.venue.timezone
+    start = _as_date_arg(args.since) or config.start_date
+    end = _as_date_arg(args.until) or config.end_date
+    if end < start:
+        print(f"error: --until {end} is before --since {start}", file=sys.stderr)
+        return 1
+
+    targets = candidate_dates(config.targets, start, end)
+    upcoming, passed = plan(targets, rule, tz, now=_now(config).replace(tzinfo=ZoneInfo(tz)))
+
+    print(
+        f"{config.venue.name}: {len(targets)} target dates in {start} … {end}, "
+        f"assuming booking opens {rule.lead_days} days ahead at {rule.open_time:%H:%M} {tz}"
+    )
+    if passed:
+        print(
+            f"  {len(passed)} already opened — the earliest was "
+            f"{passed[0].opens_at:%Y-%m-%d %H:%M}, so no reminder is possible for those"
+        )
+    if not upcoming:
+        print(
+            "\nnothing to remind you about: every date in this window opened in the past.\n"
+            "Pick a window at least the lead time out, e.g.\n"
+            f"  --since {(_now(config).date() + dt.timedelta(days=rule.lead_days)).isoformat()}"
+        )
+        return 0
+
+    for release in upcoming:
+        print(
+            f"  {release.target:%a %Y-%m-%d}  opens  {release.opens_at:%a %Y-%m-%d %H:%M %Z}"
+        )
+
+    ics = build_ics(
+        upcoming,
+        venue_name=config.venue.name,
+        party_size=config.party_size,
+        booking_url=config.venue.profile_url or config.venue.url,
+        rule=rule,
+    )
+    out = pathlib.Path(args.out)
+    out.write_text(ics, newline="")
+    print(f"\n{len(upcoming)} reminders written to {out}")
+    if rule.assumed:
+        print(
+            "The lead time is assumed, not confirmed. Check it with the restaurant "
+            "before trusting a year of reminders, then set release.assumed: false."
+        )
+    return 0
+
+
+def _as_date_arg(value: str | None) -> dt.date | None:
+    if not value:
+        return None
+    try:
+        return dt.date.fromisoformat(value)
+    except ValueError as exc:
+        raise ConfigError(f"expected YYYY-MM-DD, got {value!r}") from exc
+
+
 def cmd_diagnose(args: argparse.Namespace) -> int:
     """Report how the booking host responds to different request shapes."""
     from .diagnose import run
@@ -170,6 +240,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     diagnose.add_argument("--timeout", type=float, default=15.0)
     diagnose.set_defaults(func=cmd_diagnose)
+
+    release = sub.add_parser(
+        "release-dates",
+        help="calendar reminders for when target dates open for booking",
+    )
+    release.add_argument("--since", default=None, metavar="YYYY-MM-DD",
+                        help="override the config's date_range.start")
+    release.add_argument("--until", default=None, metavar="YYYY-MM-DD",
+                        help="override the config's date_range.end")
+    release.add_argument("--out", default="releases.ics", metavar="PATH",
+                        help="where to write the .ics file (default: releases.ics)")
+    release.set_defaults(func=cmd_release_dates)
 
     test = sub.add_parser("test-email", help="send yourself one message to verify SMTP")
     test.set_defaults(func=cmd_test_email)

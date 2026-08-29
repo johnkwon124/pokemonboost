@@ -110,6 +110,8 @@ prefer it over calling Python directly:
 ./scripts/run-local.sh probe        # every seating found, sends nothing
 ./scripts/run-local.sh probe --dump raw.json   # …and keep the raw responses
 ./scripts/run-local.sh diagnose     # can this machine reach OpenTable?
+./scripts/run-local.sh release-dates --since 2027-10-01 --until 2027-12-31
+                                    # calendar for when dates open for booking
 ./scripts/run-local.sh test-email   # prove SMTP still works
 ```
 
@@ -149,3 +151,32 @@ SevenRooms ship alongside the OpenTable one — those three are not known to
 block datacenter traffic, so a venue on any of them could go back to running
 on GitHub Actions. To watch a second venue, copy the config and point
 `RESERVATION_CONFIG` at it.
+
+## Release-date reminders
+
+OpenTable refuses this client (see `docs/MAC_MINI_HANDOFF.md`), so the
+availability watch cannot run. `release-dates` is the part of the goal that
+needs no access to OpenTable at all: the moment a date opens for booking is
+just the target date minus the venue's lead time, so it can be computed now and
+handed to a calendar that fires on its own.
+
+```bash
+.venv/bin/python -m reservation_monitor release-dates \
+  --since 2027-10-01 --until 2027-12-31 --out hopr.ics
+```
+
+It prints each target date with the instant it opens, and writes an `.ics` with
+one alarmed event per date. Import it once (double-click on macOS); event UIDs
+are derived from the venue and target date, so re-running and re-importing
+updates those events rather than duplicating them.
+
+Two things worth knowing:
+
+- **The window has to be at least the lead time out.** Asking for a range whose
+  releases have already passed produces no reminders — correctly, but silently
+  if you are not reading. The command says how many already opened and suggests
+  a workable `--since` rather than writing an empty calendar.
+- **`release.lead_days` is an assumption.** The project notes say "about a year";
+  nobody has confirmed the exact rule or the hour of day. Until someone does,
+  every event carries that caveat in its description. Confirm it with the
+  restaurant, set the real values, and set `release.assumed: false`.

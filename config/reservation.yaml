@@ -46,6 +46,20 @@ scan:
   max_dates_per_run: 13
   pause_seconds: 1.5
 
+# When a date opens for booking, for the `release-dates` command. Availability
+# polling needs OpenTable to answer; this does not — the release moment falls
+# out of the target date, so a calendar can carry it.
+#
+# IMPORTANT: lead_days is an assumption carried over from the project notes
+# ("released about a year ahead"), not a policy anyone has confirmed. One call
+# to the restaurant settles both it and open_time. Once confirmed, set
+# assumed: false and the calendar entries stop carrying the caveat.
+release:
+  lead_days: 365
+  open_time: "09:00"    # venue-local
+  alarm_minutes: 15     # alert this long before it opens
+  assumed: true
+
 notify:
   to:
     - jkwon47@gmail.com
