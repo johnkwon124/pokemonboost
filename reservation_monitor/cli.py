@@ -110,6 +110,13 @@ def cmd_probe(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_diagnose(args: argparse.Namespace) -> int:
+    """Report how the booking host responds to different request shapes."""
+    from .diagnose import run
+
+    return run(timeout=args.timeout)
+
+
 def cmd_test_email(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     now = _now(config)
@@ -140,6 +147,12 @@ def build_parser() -> argparse.ArgumentParser:
     probe.add_argument("--days", type=int, default=0, help="limit to the next N days")
     probe.add_argument("--all-days", action="store_true", help="ignore target weekdays")
     probe.set_defaults(func=cmd_probe)
+
+    diagnose = sub.add_parser(
+        "diagnose", help="report how the booking host responds to us (bot-block triage)"
+    )
+    diagnose.add_argument("--timeout", type=float, default=15.0)
+    diagnose.set_defaults(func=cmd_diagnose)
 
     test = sub.add_parser("test-email", help="send yourself one message to verify SMTP")
     test.set_defaults(func=cmd_test_email)

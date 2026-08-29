@@ -1,20 +1,24 @@
 name: Reservation monitor
 
-# Watches the restaurant's booking platform for the seatings in
-# config/reservation.yaml and e-mails when one opens up. Cancellations get
-# re-booked within minutes, so this polls often.
+# Manual only. OpenTable tarpits every request from GitHub's IP ranges -- a
+# diagnose run showed even robots.txt hanging for the full timeout while
+# example.com answered in 0.0s from the same runner -- so a scheduled job here
+# could only ever fail. The monitor runs from a machine on a home connection
+# instead; see docs/RESERVATION_MONITOR.md.
+#
+# This is kept so `diagnose` can be re-run from here later: if OpenTable ever
+# stops blocking datacenter traffic, the cron can come back.
 on:
-  schedule:
-    # Every 10 minutes, deliberately off the :00 mark where every scheduled
-    # job on GitHub piles up. Times are UTC; GitHub treats these as best
-    # effort and will skip runs when the shared queue is busy.
-    - cron: "3,13,23,33,43,53 * * * *"
   workflow_dispatch:
     inputs:
-      probe:
-        description: "Print every seating found instead of e-mailing"
-        type: boolean
-        default: false
+      mode:
+        description: "What to run"
+        type: choice
+        default: check
+        options:
+          - check      # normal scan; e-mails anything new
+          - probe      # print every seating found, send nothing
+          - diagnose   # report how the booking host responds to us
 
 # Never let two scans overlap; a queued one is dropped rather than doubled up.
 concurrency:
@@ -61,12 +65,7 @@ jobs:
           RESY_AUTH_TOKEN: ${{ secrets.RESY_AUTH_TOKEN }}
           OPENTABLE_AUTH_TOKEN: ${{ secrets.OPENTABLE_AUTH_TOKEN }}
           OPENTABLE_COOKIE: ${{ secrets.OPENTABLE_COOKIE }}
-        run: |
-          if [ "${{ inputs.probe }}" = "true" ]; then
-            python -m reservation_monitor probe
-          else
-            python -m reservation_monitor check
-          fi
+        run: python -m reservation_monitor "${{ inputs.mode || 'check' }}"
 
       - name: Save monitor state
         if: always()
