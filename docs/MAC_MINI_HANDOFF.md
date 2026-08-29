@@ -46,15 +46,18 @@ This is the work that session needs to finish.
 
 3. **Look at a real response.** This is the point of the exercise.
    ```bash
-   .venv/bin/python -m reservation_monitor probe --days 21
+   .venv/bin/python -m reservation_monitor probe --days 21 --dump raw.json
    ```
    It should print seatings. If it errors, or prints nothing where the
    OpenTable website plainly shows times, the GraphQL query or the parser in
-   `reservation_monitor/providers/opentable.py` does not match reality. Capture
-   the raw payload, fix the parser against it, and add a test to
-   `tests/test_providers.py` built from the real shape — the existing OpenTable
-   tests are written against an assumed one and should be corrected, not
-   preserved.
+   `reservation_monitor/providers/opentable.py` does not match reality. Pass
+   `--dump` on the first run whatever happens: it writes every HTTP exchange —
+   status, headers, body, and any transport error, retries included — to
+   `raw.json` even when the run raises, and that file is the only thing a
+   parser fix can be written against. Fix the parser against it and add a test
+   to `tests/test_providers.py` built from the real shape — the existing
+   OpenTable tests are written against an assumed one and should be corrected,
+   not preserved. `raw.json` is untracked; do not commit it.
 
 4. **Ask John for the Gmail app password**, then finish the install:
    ```bash
@@ -76,3 +79,28 @@ This is the work that session needs to finish.
 - Silence is meant to mean "no availability", never "the monitor died": there is
   a daily 8am heartbeat e-mail and an alert after three consecutive failures.
   Keep both working.
+
+## What the second cloud session found (2026-08-29)
+
+This handoff was picked up by another **cloud** session, not the Mac mini — so
+step 2's gate tripped again and steps 3–5 remain unstarted. Worth knowing
+before someone re-reads the transcript and thinks the probe has been run:
+
+- The session ran on Ubuntu 24.04 in an Anthropic container behind an
+  allowlist egress proxy. `diagnose` did not tarpit; it never left the box.
+  All three probes, `example.com` control included, failed as
+  `ProxyError … Tunnel connection failed: 403 Forbidden`. A control that fails
+  means the run says nothing about OpenTable either way.
+- The 60 tests still pass (65 now, with the capture tests below).
+- No Gmail app password was requested or stored. It should only ever be
+  entered on the Mac mini, into `~/.reservation-monitor/env`. A cloud container
+  is ephemeral and is the wrong place for it.
+- The parser was **not** touched. Guessing at a second shape to replace the
+  first assumed one would only move the guess, and there is still no observed
+  response to correct it against.
+- What did change: `probe --dump PATH` and the capture plumbing in
+  `providers/base.py`, so that the run which finally does reach OpenTable
+  leaves the evidence behind instead of just printing `no seatings returned`.
+
+So step 2 is still the first real step, and it has to happen on a machine with
+a home IP.

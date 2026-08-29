@@ -23,3 +23,8 @@ dist/
 
 # local virtualenv for the reservation monitor
 .venv/
+
+# raw probe captures: real response bodies, plus session cookies and the CSRF
+# token in the recorded headers. Read them, fix the parser, do not commit them.
+raw.json
+raw*.json

@@ -98,9 +98,20 @@ def cmd_probe(args: argparse.Namespace) -> int:
     days = candidate_dates(config.targets, start, end) if not args.all_days else _all_days(start, end)
 
     provider = build_provider(config)
-    slots = provider.collect(days, pause=config.scan.pause_seconds)
+    provider.capture_raw = bool(args.dump)
+    try:
+        slots = provider.collect(days, pause=config.scan.pause_seconds)
+    finally:
+        # The failing run is the one worth keeping: a probe that errors, or
+        # returns nothing where the website plainly shows times, cannot be
+        # diagnosed from its own stdout. Written on the way out either way.
+        if args.dump:
+            count = provider.write_captures(args.dump)
+            print(f"wrote {count} raw exchange(s) to {args.dump}")
     if not slots:
         print(f"no seatings returned for {len(days)} dates ({start} … {end})")
+        if not args.dump:
+            print("re-run with --dump raw.json to capture what the server actually sent")
         return 0
     for slot in sorted(slots, key=lambda s: s.start):
         print(f"{slot.start:%a %Y-%m-%d %H:%M}  party={slot.party_size}  {slot.table_type}")
@@ -146,6 +157,12 @@ def build_parser() -> argparse.ArgumentParser:
     probe = sub.add_parser("probe", help="print every seating the provider returns")
     probe.add_argument("--days", type=int, default=0, help="limit to the next N days")
     probe.add_argument("--all-days", action="store_true", help="ignore target weekdays")
+    probe.add_argument(
+        "--dump",
+        default=None,
+        metavar="PATH",
+        help="write every raw HTTP exchange to PATH as JSON, errors included",
+    )
     probe.set_defaults(func=cmd_probe)
 
     diagnose = sub.add_parser(

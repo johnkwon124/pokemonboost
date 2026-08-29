@@ -7,7 +7,7 @@ import datetime as dt
 import pytest
 
 from reservation_monitor.config import load_config
-from reservation_monitor.providers import build_provider
+from reservation_monitor.providers import ProviderError, build_provider
 
 CONFIG = """
 restaurant:
@@ -235,3 +235,95 @@ def test_opentable_config_needs_a_venue_or_a_profile_url(tmp_path):
     )
     with pytest.raises(ConfigError, match="venue_id or profile_url"):
         load_config(path)
+
+
+# -- raw capture -------------------------------------------------------------
+#
+# The whole point of ``probe --dump`` is the run that goes wrong: a parser
+# written against an assumed response shape can only be corrected against a
+# recorded real one, and a probe that prints "no seatings" tells you nothing.
+
+
+class FakeResponse:
+    def __init__(self, status_code=200, body="{}", headers=None):
+        self.status_code = status_code
+        self.text = body
+        self.headers = headers or {"Content-Type": "application/json"}
+
+    def json(self):
+        import json
+
+        return json.loads(self.text)
+
+
+def capturing_provider(tmp_path, monkeypatch, responder):
+    monkeypatch.setenv("OPENTABLE_AUTH_TOKEN", "test-token")
+    path = tmp_path / "reservation.yaml"
+    path.write_text(CONFIG.format(provider="opentable"))
+    instance = build_provider(load_config(path))
+    instance.capture_raw = True
+    monkeypatch.setattr(instance.session, "request", responder)
+    return instance
+
+
+def test_capture_keeps_the_body_of_a_successful_exchange(tmp_path, monkeypatch):
+    body = '{"data": {"availability": []}}'
+    provider = capturing_provider(
+        tmp_path, monkeypatch, lambda method, url, **kw: FakeResponse(body=body)
+    )
+    provider._request("POST", "https://example.invalid/gql", json_body={})
+
+    assert len(provider.captures) == 1
+    entry = provider.captures[0]
+    assert entry["status"] == 200
+    assert entry["body"] == body
+    assert entry["url"] == "https://example.invalid/gql"
+
+
+def test_capture_keeps_a_failing_exchange_too(tmp_path, monkeypatch):
+    provider = capturing_provider(
+        tmp_path, monkeypatch, lambda method, url, **kw: FakeResponse(status_code=500, body="nope")
+    )
+    with pytest.raises(ProviderError):
+        provider._request("POST", "https://example.invalid/gql", json_body={})
+
+    # Three attempts, all recorded — the retries are part of the evidence.
+    assert [c["status"] for c in provider.captures] == [500, 500, 500]
+    assert provider.captures[0]["body"] == "nope"
+
+
+def test_capture_records_a_transport_error(tmp_path, monkeypatch):
+    import requests
+
+    def boom(method, url, **kw):
+        raise requests.ConnectionError("refused")
+
+    provider = capturing_provider(tmp_path, monkeypatch, boom)
+    with pytest.raises(ProviderError):
+        provider._request("GET", "https://example.invalid/gql")
+
+    assert "ConnectionError: refused" in provider.captures[0]["error"]
+    assert "status" not in provider.captures[0]
+
+
+def test_capture_is_off_unless_asked_for(tmp_path, monkeypatch):
+    provider = capturing_provider(
+        tmp_path, monkeypatch, lambda method, url, **kw: FakeResponse()
+    )
+    provider.capture_raw = False
+    provider._request("POST", "https://example.invalid/gql", json_body={})
+    assert provider.captures == []
+
+
+def test_write_captures_round_trips_to_disk(tmp_path, monkeypatch):
+    provider = capturing_provider(
+        tmp_path, monkeypatch, lambda method, url, **kw: FakeResponse(body='{"hello": 1}')
+    )
+    provider._request("POST", "https://example.invalid/gql", json_body={})
+    out = tmp_path / "nested" / "raw.json"
+
+    assert provider.write_captures(out) == 1
+    import json
+
+    written = json.loads(out.read_text())
+    assert written[0]["body"] == '{"hello": 1}'

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
+import pathlib
 import time
 from typing import Any
 
@@ -35,6 +37,11 @@ class Provider:
         self.venue = config.venue
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
+        # When on, every HTTP exchange is kept verbatim so a run that returns
+        # nothing can still be debugged afterwards. ``probe --dump`` turns it
+        # on; ``check`` leaves it off so an unattended watch writes nothing.
+        self.capture_raw = False
+        self.captures: list[dict] = []
 
     # -- subclass hooks ---------------------------------------------------
 
@@ -68,6 +75,30 @@ class Provider:
 
     # -- helpers ----------------------------------------------------------
 
+    def _record(self, method: str, url: str, response: Any = None, error: str = "") -> None:
+        """Keep one exchange verbatim, if capturing is on."""
+        if not self.capture_raw:
+            return
+        entry: dict[str, Any] = {
+            "at": dt.datetime.now().isoformat(timespec="seconds"),
+            "method": method,
+            "url": url,
+        }
+        if error:
+            entry["error"] = error
+        if response is not None:
+            entry["status"] = response.status_code
+            entry["headers"] = dict(response.headers)
+            entry["body"] = response.text
+        self.captures.append(entry)
+
+    def write_captures(self, path) -> int:
+        """Write everything captured so far as JSON. Returns the count."""
+        target = pathlib.Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(self.captures, indent=2, ensure_ascii=False))
+        return len(self.captures)
+
     def _get(self, url: str, *, params: dict | None = None, headers: dict | None = None) -> Any:
         return self._request("GET", url, params=params, headers=headers)
 
@@ -85,7 +116,9 @@ class Provider:
                 )
             except requests.RequestException as exc:
                 last = exc
+                self._record("GET", url, error=f"{type(exc).__name__}: {exc}")
             else:
+                self._record("GET", url, response=resp)
                 if resp.status_code == 200:
                     return resp.text
                 last = ProviderError(f"{self.name}: HTTP {resp.status_code} from {url}")
@@ -114,7 +147,9 @@ class Provider:
                 )
             except requests.RequestException as exc:
                 last = exc
+                self._record(method, url, error=f"{type(exc).__name__}: {exc}")
             else:
+                self._record(method, url, response=resp)
                 if resp.status_code == 200:
                     try:
                         return resp.json()

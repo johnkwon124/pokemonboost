@@ -108,6 +108,7 @@ prefer it over calling Python directly:
 ```bash
 ./scripts/run-local.sh              # one scan; e-mails anything new
 ./scripts/run-local.sh probe        # every seating found, sends nothing
+./scripts/run-local.sh probe --dump raw.json   # …and keep the raw responses
 ./scripts/run-local.sh diagnose     # can this machine reach OpenTable?
 ./scripts/run-local.sh test-email   # prove SMTP still works
 ```
