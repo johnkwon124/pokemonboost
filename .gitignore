@@ -20,3 +20,6 @@ dist/
 
 # reservation monitor state (carried between runs by actions/cache)
 .monitor-state/
+
+# local virtualenv for the reservation monitor
+.venv/
