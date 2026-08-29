@@ -36,13 +36,15 @@ targets:
     time: "16:00"
     tolerance_minutes: 30
 
-# 39 Fri/Sat/Sun dates fall in the window. Checking all of them every ten
-# minutes would be ~5,600 OpenTable requests a day and an invitation to get
-# throttled, so each run takes the next 13 and the cursor rotates: the whole
-# quarter is covered every 3 runs, roughly every 30 minutes.
+# 39 Fri/Sat/Sun dates fall in the window. Each run takes the next 13 and the
+# cursor rotates, so at the 15-minute timer the whole quarter is covered every
+# 45 minutes for about 1,250 requests a day. That is a normal amount of
+# browsing from a home connection; asking for all 39 every run would be four
+# times that and is how you get rate-limited. Set max_dates_per_run to 0 to
+# check everything on every run.
 scan:
   max_dates_per_run: 13
-  pause_seconds: 0.5
+  pause_seconds: 1.5
 
 notify:
   to:

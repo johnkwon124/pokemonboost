@@ -50,28 +50,25 @@ class Probe:
     headers: dict
 
 
-# Round one established that this is not about headers. Every shape sent to
-# www.opentable.com -- including robots.txt, a static file every crawler on the
-# internet fetches, and a bare HEAD -- was tarpitted for the full timeout, while
-# example.com answered in 0.0s from the same runner. A block that catches
-# robots.txt is keyed on the connecting IP, not on what the request looks like,
-# so neither better headers nor a headless browser would change it.
+# What two rounds against OpenTable established, so it is not re-litigated:
 #
-# Round two asks a narrower question: is the block on the whole of OpenTable's
-# infrastructure, or only on the www host? The mobile app and the regional sites
-# sit behind different front doors, and any one of them answering would be
-# enough to build on. Even a 404 counts as reachable here -- it means packets
-# get through and only the path is wrong.
+#   * It is not about headers. Every shape sent to www.opentable.com was
+#     tarpitted for the full timeout -- robots.txt, the static file every
+#     crawler fetches, and a bare HEAD included -- while example.com answered
+#     in 0.0s from the same runner.
+#   * It is not about which front door. The apex, the UK and Canada sites all
+#     tarpit too; mobile-api returns an Akamai "Access Denied"; api.opentable
+#     .com will not even open a connection.
+#
+# A block that catches robots.txt is keyed on the connecting IP, so no header
+# set and no headless browser would move it. What this command is now for is
+# answering one question on whatever machine it runs on: can this host reach
+# OpenTable at all? Run it before trusting a new machine to do the watching.
 PROBES = [
-    Probe("www (known tarpit)", "GET", "https://www.opentable.com/robots.txt", BROWSERLIKE),
-    Probe("apex, no www", "GET", "https://opentable.com/robots.txt", BROWSERLIKE),
-    Probe("mobile app API root", "GET", "https://mobile-api.opentable.com/", BROWSERLIKE),
-    Probe("mobile app API, v1", "GET", "https://mobile-api.opentable.com/api/v1/", BROWSERLIKE),
-    Probe("api host", "GET", "https://api.opentable.com/", BROWSERLIKE),
-    Probe("platform host", "GET", "https://platform.opentable.com/", BROWSERLIKE),
-    Probe("UK site", "GET", "https://www.opentable.co.uk/robots.txt", BROWSERLIKE),
-    Probe("Canada site", "GET", "https://www.opentable.ca/robots.txt", BROWSERLIKE),
-    # Control: proves the runner still has working egress.
+    Probe("robots.txt", "GET", "https://www.opentable.com/robots.txt", BROWSERLIKE),
+    Probe("venue page", "GET", "https://www.opentable.com/house-of-prime-rib", BROWSERLIKE),
+    # Control: proves this machine has working egress, so a failure above is
+    # OpenTable's decision rather than a broken network.
     Probe("control (example.com)", "GET", "https://example.com/", BROWSERLIKE),
 ]
 
