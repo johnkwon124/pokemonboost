@@ -140,3 +140,54 @@ answers on its own, and what `robots.txt` — now that it is readable — actual
 permits on these paths. That last one is a constraint on the answer, not a
 detail: if it disallows them, the approach gets reconsidered rather than worked
 around.
+
+## The answer to step 3: the real response is a refusal
+
+Narrowing the venue-page tarpit with a second client settled it. Same Mac mini,
+same home IP, same Chrome user-agent throughout:
+
+| client         | HTTP | path              | result                  |
+|----------------|------|-------------------|-------------------------|
+| python-requests| 1.1  | `robots.txt`      | 200, 70356B, 0.2s       |
+| curl           | 2    | `robots.txt`      | RST_STREAM, 0.12s       |
+| python-requests| 1.1  | venue page        | tarpit, 15s             |
+| curl           | 2    | venue page        | RST_STREAM, 0.12s       |
+| curl           | 2    | `/dapi/fe/gql`    | 403, 0.2s               |
+
+The same `robots.txt` succeeds for one client and is cut off for the other, and
+curl's connection is reset in 0.115s — actively closed, not timed out. So the
+refusal is keyed on the client, not the IP and not the path: this is bot
+detection (Akamai) varying its rejection mode by what it thinks it is talking
+to.
+
+**Every endpoint the monitor needs is refused.** The venue page, which the
+provider scrapes for `rid` and the CSRF token, is refused by both clients. The
+GraphQL endpoint that would return availability answers 403.
+
+### So the parser was never the blocker
+
+The point of the exercise was to see a real response and correct the parser
+against it. The real response is a 403 and a reset connection. Nothing reaches
+the parser, so whether it matches OpenTable's schema is both unanswerable and
+no longer the question. The OpenTable tests still encode an assumed shape; they
+should not be "corrected" against a guess, and there is nothing else to correct
+them against.
+
+### Where this stops
+
+What remains technically is driving a real browser or impersonating a browser's
+TLS fingerprint. That is not a workaround for a bug — it is evasion of an access
+control the operator deliberately deployed, against exactly the activity it
+exists to stop. Step 2 of this handoff already said to report rather than work
+around, and that still holds; the earlier note that the ban on headless browsers
+"no longer follows" was about the technical premise being void, and this section
+supplies a different reason to stay on this side of it.
+
+Sanctioned routes to the same goal, in rough order of odds: OpenTable's own
+notify/waitlist alerts for a fully-booked restaurant; the restaurant's phone
+line, which takes reservations directly and is usually faster on a cancellation
+than any poller; and a reminder set for the release date roughly a year ahead,
+which beats hunting cancellations and needs no access to OpenTable at all.
+
+The code in this repo — config, matching, state, notification, the 65 tests —
+is sound and was never the problem. It is left as is.
