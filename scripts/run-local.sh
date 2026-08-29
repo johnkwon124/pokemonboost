@@ -18,4 +18,11 @@ else
 fi
 
 cd "$REPO_DIR" || exit 1
-exec "${REPO_DIR}/.venv/bin/python" -m reservation_monitor "${1:-check}"
+
+# Pass every argument through, not just the first: `probe --dump raw.json`
+# needs its flags. Set the default positionally rather than with "${@:-check}",
+# which trips `set -u` on the bash 3.2 that ships with macOS.
+if [ "$#" -eq 0 ]; then
+  set -- check
+fi
+exec "${REPO_DIR}/.venv/bin/python" -m reservation_monitor "$@"
