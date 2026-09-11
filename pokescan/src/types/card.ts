@@ -15,6 +15,15 @@ export interface MarketPrice {
   source: string;
 }
 
+/** Cardmarket (EU market, EUR) prices — fallback when TCGPlayer data is missing. */
+export interface CardmarketPrices {
+  trendEur: number | null;
+  avgSellEur: number | null;
+  lowEur: number | null;
+  avg30Eur: number | null;
+  updatedAt: string | null;
+}
+
 export interface Card {
   id: string;
   name: string;
@@ -42,6 +51,7 @@ export interface Card {
   flavorText: string | null;
   artist: string | null;
   prices: MarketPrice[];
+  cardmarket: CardmarketPrices | null;
   // "en" English / "jp" Japanese / "kr" Korean — drives data source and labels
   locale: "en" | "jp" | "kr";
   estimated: boolean; // true if price was inferred from the English equivalent

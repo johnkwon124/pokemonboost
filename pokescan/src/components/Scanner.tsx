@@ -9,15 +9,16 @@ import {
   type ScanChoices,
   type ScanOutcome
 } from "@/lib/scanFlow";
+import { warmPokedex } from "@/lib/pokedex";
 
 type ScanState = "idle" | "starting" | "scanning" | "busy" | "error";
 
-const SCAN_INTERVAL_MS = 600;
+const SCAN_INTERVAL_MS = 500;
 const SCAN_MAX_ATTEMPTS = 12;
 // average per-channel pixel delta below which we treat the frame as "held still"
 const STILL_THRESHOLD = 18;
 // if the frame never settles, capture anyway after this many consecutive shaky ticks
-const FORCE_AFTER_SHAKY_TICKS = 3;
+const FORCE_AFTER_SHAKY_TICKS = 2;
 
 interface Props {
   onResult: (outcome: ScanOutcome) => void;
@@ -35,7 +36,8 @@ const CARD = { x: 0.08, w: 0.84, top: 0.06, h: 0.88 };
 // Small inner band used only for motion detection — keeps the steadiness check
 // cheap by sampling the high-contrast number row instead of the whole card.
 const BAND = { x: CARD.x, w: CARD.w, top: CARD.top + CARD.h * 0.8, h: CARD.h * 0.2 };
-const MAX_UPLOAD_DIM = 1600;
+// smaller upload = faster round trip on mobile data; card name/number stay legible
+const MAX_UPLOAD_DIM = 1280;
 
 export default function Scanner({ onResult, onChoices, sessionCount, autoStart = false }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -130,7 +132,7 @@ export default function Scanner({ onResult, onChoices, sessionCount, autoStart =
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
     ctx.drawImage(video, r.x, r.y, r.w, r.h, 0, 0, outW, outH);
-    return canvas.toDataURL("image/jpeg", 0.85).split(",")[1] ?? null;
+    return canvas.toDataURL("image/jpeg", 0.8).split(",")[1] ?? null;
   }, []);
 
   // auto path, routed by detected language:
@@ -275,6 +277,8 @@ export default function Scanner({ onResult, onChoices, sessionCount, autoStart =
     shakyTicksRef.current = 0;
     prevSampleRef.current = null;
     lastReadRef.current = null;
+    // prefetch the JP/KR species dictionary while the camera warms up
+    warmPokedex();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import type { Card } from "@/types/card";
 import { pickGeneralPrice } from "@/lib/tcg";
+import { FALLBACK_EUR_USD } from "@/lib/fx";
 
 interface Props {
   matchedName: string;
@@ -39,6 +40,8 @@ export default function CandidatePicker({ matchedName, lang, candidates, onPick,
       <div className="grid grid-cols-2 gap-3">
         {candidates.map((card) => {
           const price = pickGeneralPrice(card);
+          const usd = price?.marketUsd ?? null;
+          const cmEur = card.cardmarket?.trendEur ?? card.cardmarket?.avgSellEur ?? null;
           return (
             <button
               key={card.id}
@@ -57,7 +60,11 @@ export default function CandidatePicker({ matchedName, lang, candidates, onPick,
                   {card.setPrintedTotal ? `/${card.setPrintedTotal}` : ""}
                 </span>
                 <span className="text-xs font-semibold text-accent">
-                  {price?.marketUsd != null ? `$${price.marketUsd.toFixed(2)}` : "시세 없음"}
+                  {usd != null
+                    ? `$${usd.toFixed(2)}`
+                    : cmEur != null
+                      ? `≈$${(cmEur * FALLBACK_EUR_USD).toFixed(2)}`
+                      : "시세 확인 필요"}
                 </span>
               </div>
             </button>

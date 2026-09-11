@@ -2,6 +2,7 @@ import { runVisionOcr } from "./visionClient";
 import { parseCardNumbers, type ParsedNumber } from "./parseCardNumber";
 import { findCardByNumber, findCardsByName, asLocalized } from "./tcg";
 import { extractNameTokens, resolveEnglishSpecies } from "./pokedex";
+import { extractCardHints, narrowByHints } from "./cardHints";
 import { detectCardLang, type CardLang } from "./lang";
 import { buildStaticAnalysis } from "./staticAnalysis";
 import type { Analysis, Card } from "@/types/card";
@@ -74,10 +75,16 @@ export async function resolveJpKr(text: string, lang: "ja" | "ko"): Promise<Scan
   }
 
   const locale = lang === "ja" ? "jp" : "kr";
-  const candidates = (await findCardsByName(hit.en)).map((c) => asLocalized(c, locale));
-  if (candidates.length === 0) {
+  const all = (await findCardsByName(hit.en)).map((c) => asLocalized(c, locale));
+  if (all.length === 0) {
     throw new ScanNotFoundError(`"${hit.en}" 카드를 DB에서 찾지 못했어요`, text);
   }
+
+  // Narrow by HP + mechanic suffix read from the same OCR pass — a card keeps
+  // both across languages, so this often collapses the list to the exact card.
+  const hints = extractCardHints(text);
+  const candidates = narrowByHints(all, hints).slice(0, 8);
+
   if (candidates.length === 1) {
     return { card: candidates[0], analysis: buildStaticAnalysis(candidates[0]), ocrText: hit.matchedToken };
   }

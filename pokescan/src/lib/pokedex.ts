@@ -58,6 +58,14 @@ function getMaps(): Promise<SpeciesMaps> {
   return mapsPromise;
 }
 
+/**
+ * Fire-and-forget prefetch of the species dictionary (~400KB CSV). Called when
+ * the camera starts so the first JP/KR scan doesn't pay the download latency.
+ */
+export function warmPokedex(): void {
+  getMaps().catch(() => undefined);
+}
+
 /** Extract candidate name tokens (pure-script runs) from OCR text, in reading order. */
 export function extractNameTokens(text: string, lang: "ja" | "ko"): string[] {
   const re = lang === "ja" ? /[ァ-ヶー]{2,}/g : /[가-힣]{2,}/g;

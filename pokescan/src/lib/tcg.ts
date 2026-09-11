@@ -42,10 +42,35 @@ interface TcgCard {
     updatedAt?: string;
     prices?: Partial<Record<PriceVariant, TcgPriceBlock>>;
   };
+  cardmarket?: {
+    updatedAt?: string;
+    prices?: {
+      trendPrice?: number;
+      averageSellPrice?: number;
+      lowPrice?: number;
+      avg30?: number;
+    };
+  };
 }
 
 function headers(): HeadersInit {
   return KEY ? { "X-Api-Key": KEY } : {};
+}
+
+/**
+ * pokemontcg.io's TCGPlayer price sync is often stale or missing for trainer
+ * cards and the newest sets, while the Cardmarket (EU) block is present — keep
+ * both so the UI can fall back instead of claiming "no market value".
+ */
+function toCardmarket(raw: TcgCard): Card["cardmarket"] {
+  const p = raw.cardmarket?.prices;
+  if (!p) return null;
+  const trendEur = p.trendPrice ?? null;
+  const avgSellEur = p.averageSellPrice ?? null;
+  const lowEur = p.lowPrice ?? null;
+  const avg30Eur = p.avg30 ?? null;
+  if (trendEur === null && avgSellEur === null && lowEur === null && avg30Eur === null) return null;
+  return { trendEur, avgSellEur, lowEur, avg30Eur, updatedAt: raw.cardmarket?.updatedAt ?? null };
 }
 
 function toPrices(raw: TcgCard): MarketPrice[] {
@@ -91,6 +116,7 @@ function normalize(raw: TcgCard, locale: "en" | "jp" = "en", estimated = false):
     flavorText: raw.flavorText ?? null,
     artist: raw.artist ?? null,
     prices: toPrices(raw),
+    cardmarket: toCardmarket(raw),
     locale,
     estimated
   };
@@ -142,7 +168,7 @@ export async function getCardById(id: string): Promise<Card | null> {
  * we resolve the species name to English, then let the user pick the exact
  * printing from this list.
  */
-export async function findCardsByName(name: string, limit = 8): Promise<Card[]> {
+export async function findCardsByName(name: string, limit = 12): Promise<Card[]> {
   const clean = name.replace(/["*]/g, "").trim();
   if (!clean) return [];
   let raws = await tcgQuery(`name:"${clean}*"`, limit);
